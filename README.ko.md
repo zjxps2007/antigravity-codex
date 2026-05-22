@@ -26,19 +26,52 @@ agy plugin validate .
 agy plugin install .
 ```
 
-## Companion 명령
+## GitHub에서 설치
+
+Antigravity CLI 사용자는 GitHub 저장소에서 바로 설치할 수 있습니다.
+
+```bash
+agy plugin install https://github.com/zjxps2007/antigravity-codex.git
+```
+
+설치 후 먼저 확인합니다.
+
+```text
+/codex:setup
+```
+
+## Antigravity Slash Commands
+
+플러그인을 설치한 뒤 아래 slash command를 기본 사용 경로로 씁니다.
+
+```text
+/codex:setup
+/codex:review --background
+/codex:adversarial-review --base main "인증 경계를 중점적으로 검토"
+/codex:rescue --write "실패하는 테스트 수정"
+/codex:status
+/codex:result
+/codex:cancel
+```
+
+명령 파일은 `commands/` 아래에 있고 `disable-model-invocation: true`를 사용합니다. 따라서 자연어 자동 라우팅보다 명시적인 command 호출을 우선합니다.
+
+## Companion CLI
 
 ```bash
 node dist/agy-codex.mjs setup
 node dist/agy-codex.mjs review --wait
 node dist/agy-codex.mjs adversarial-review --base main "인증 경계를 중점적으로 검토"
+node dist/agy-codex.mjs rescue --write "실패하는 테스트 수정"
 node dist/agy-codex.mjs task --write "실패하는 테스트 수정"
 node dist/agy-codex.mjs status
 node dist/agy-codex.mjs result
 node dist/agy-codex.mjs cancel
 ```
 
-`review`, `adversarial-review`, `task`에 `--background`를 붙이면 작업을 큐에 넣고 즉시 job id를 반환합니다.
+`review`, `adversarial-review`, `rescue`, `task`에 `--background`를 붙이면 작업을 큐에 넣고 즉시 job id를 반환합니다.
+
+Antigravity 환경에서 스킬 브라우징이 필요한 경우를 위해 `skills/`도 유지하지만, 권장 워크플로우는 slash command입니다.
 
 ## 제공 스킬
 

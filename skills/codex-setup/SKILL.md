@@ -1,6 +1,6 @@
 ---
 name: codex-setup
-description: Checks whether the local Codex CLI is installed and ready for the Antigravity Codex plugin. Use when the user runs codex setup, asks if Codex is configured, or needs installation diagnostics.
+description: Fallback skill for explicit Codex setup checks. Prefer the /codex:setup slash command when commands are available.
 ---
 
 # Codex Setup
@@ -12,6 +12,9 @@ Resolve the companion script in this order:
 1. If `AGY_CODEX_PLUGIN_ROOT` is set, use `$AGY_CODEX_PLUGIN_ROOT/dist/agy-codex.mjs`.
 2. If the current workspace contains `dist/agy-codex.mjs`, use that.
 3. Otherwise use the installed plugin path:
+   - Windows: `%USERPROFILE%\.gemini\antigravity-cli\plugins\codex\dist\agy-codex.mjs`
+   - macOS/Linux: `$HOME/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs`
+4. For older local installs, fall back to:
    - Windows: `%USERPROFILE%\.gemini\antigravity-cli\plugins\antigravity-codex\dist\agy-codex.mjs`
    - macOS/Linux: `$HOME/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`
 

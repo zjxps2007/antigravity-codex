@@ -1,4 +1,5 @@
 node_modules/
+.antigravitycli/
 .agy-codex-data/
 coverage/
 dist-tests/

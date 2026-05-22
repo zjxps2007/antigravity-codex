@@ -1,13 +1,13 @@
 ---
 name: codex-adversarial-review
-description: Runs a skeptical read-only Codex review that challenges design choices, tradeoffs, assumptions, and failure modes. Use when the user asks for adversarial review, pressure testing, risk review, or design critique.
+description: Fallback skill for explicit adversarial Codex reviews. Prefer the /codex:adversarial-review slash command when commands are available.
 ---
 
 # Codex Adversarial Review
 
 Run an adversarial read-only review through the companion script. This review must not edit files.
 
-Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, as the installed plugin path under `~/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs`, or as the older fallback path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Supported arguments:
 

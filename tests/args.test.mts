@@ -11,6 +11,15 @@ test("splitRawArgumentString handles quotes and escapes", () => {
   ]);
 });
 
+test("splitRawArgumentString handles empty quotes", () => {
+  assert.deepEqual(splitRawArgumentString('--base main "" "focus on auth"'), [
+    "--base",
+    "main",
+    "",
+    "focus on auth"
+  ]);
+});
+
 test("parseArgs handles booleans, values, aliases, and positionals", () => {
   const parsed = parseArgs(["--background", "--base=main", "-m", "spark", "focus"], {
     booleanOptions: ["background"],

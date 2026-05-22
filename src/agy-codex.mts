@@ -163,6 +163,7 @@ function usage(): void {
   node dist/agy-codex.mjs setup [--json]
   node dist/agy-codex.mjs review [--wait|--background] [--base <ref>|--commit <sha>] [--model <model>] [prompt]
   node dist/agy-codex.mjs adversarial-review [--wait|--background] [--base <ref>] [--model <model>] [focus text]
+  node dist/agy-codex.mjs rescue [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
   node dist/agy-codex.mjs task [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
   node dist/agy-codex.mjs status [job-id] [--json]
   node dist/agy-codex.mjs result [job-id] [--json]
@@ -320,13 +321,18 @@ function runProcess(request: CodexRequest, job: JobIdentity, { stream = true }: 
       logFile
     });
 
+    const logStream = fs.createWriteStream(logFile, { flags: "a" });
+    logStream.on("error", (err) => {
+      process.stderr.write(`Failed to write to log file: ${err.message}\n`);
+    });
+
     let stdout = "";
     let stderr = "";
     const append = (chunk: Buffer | string, isErr = false): void => {
       const text = chunk.toString();
       if (isErr) stderr += text;
       else stdout += text;
-      fs.appendFileSync(logFile, text);
+      logStream.write(text);
       if (stream) {
         (isErr ? process.stderr : process.stdout).write(text);
       }
@@ -335,11 +341,14 @@ function runProcess(request: CodexRequest, job: JobIdentity, { stream = true }: 
     child.stdout?.on("data", (chunk: Buffer) => append(chunk));
     child.stderr?.on("data", (chunk: Buffer) => append(chunk, true));
     child.on("error", (error) => {
-      stderr += `${error.message}\n`;
-      fs.appendFileSync(logFile, `${error.message}\n`);
+      const msg = `${error.message}\n`;
+      stderr += msg;
+      logStream.write(msg);
     });
     child.on("close", (code, signal) => {
-      resolve({ code: code ?? 1, signal, stdout, stderr, logFile });
+      logStream.end(() => {
+        resolve({ code: code ?? 1, signal, stdout, stderr, logFile });
+      });
     });
   });
 }
@@ -367,7 +376,10 @@ async function executeTrackedRequest(
   writeJobArtifact(request.cwd, job.id, "stderr.txt", result.stderr);
   writeJobArtifact(request.cwd, job.id, "result.json", result);
 
-  const status: JobStatus = result.code === 0 ? "completed" : "failed";
+  const currentJob = findJob(request.cwd, job.id);
+  const isCancelled = currentJob?.status === "cancelled";
+  const status: JobStatus = isCancelled ? "cancelled" : (result.code === 0 ? "completed" : "failed");
+
   upsertJob(request.cwd, {
     id: job.id,
     status,
@@ -446,7 +458,13 @@ async function handleWorker(argv: string[]): Promise<void> {
     throw new Error("worker requires --cwd and --job-id.");
   }
   const job = findJob(cwd, jobId);
-  if (!job?.request) {
+  if (!job) {
+    throw new Error(`No job found for ${jobId}.`);
+  }
+  if (job.status === "cancelled") {
+    return;
+  }
+  if (!job.request) {
     throw new Error(`No queued request found for ${jobId}.`);
   }
   await executeTrackedRequest(job.request, job, { stream: false, background: true });
@@ -616,6 +634,9 @@ async function main(): Promise<void> {
       await handleReview(argv, true);
       break;
     case "task":
+      await handleTask(argv);
+      break;
+    case "rescue":
       await handleTask(argv);
       break;
     case "worker":

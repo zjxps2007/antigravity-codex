@@ -1,13 +1,13 @@
 ---
 name: codex-result
-description: Shows the stored output from a completed Antigravity Codex background job. Use when the user asks for the result, output, or final answer from a Codex job.
+description: Fallback skill for explicit Codex job result retrieval. Prefer the /codex:result slash command when commands are available.
 ---
 
 # Codex Result
 
 Show the final stored job result through the companion script.
 
-Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, as the installed plugin path under `~/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs`, or as the older fallback path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Command:
 

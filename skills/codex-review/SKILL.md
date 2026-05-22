@@ -1,13 +1,13 @@
 ---
 name: codex-review
-description: Runs a read-only Codex code review against the current git workspace. Use when the user asks for a Codex review, code review, PR review, or second-opinion review.
+description: Fallback skill for explicit Codex code reviews. Prefer the /codex:review slash command when commands are available.
 ---
 
 # Codex Review
 
 Run a read-only Codex review through the companion script.
 
-Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, as the installed plugin path under `~/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs`, or as the older fallback path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Use `--background` for anything larger than a tiny change. Use `--wait` only when the user explicitly asks to wait or the diff is clearly small.
 

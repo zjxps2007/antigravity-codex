@@ -70,7 +70,10 @@ export function writeState(cwd, state) {
         version: STATE_VERSION,
         jobs: [...state.jobs].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, MAX_JOBS)
     };
-    fs.writeFileSync(stateFile(cwd), `${JSON.stringify(next, null, 2)}\n`);
+    const file = stateFile(cwd);
+    const tmpFile = `${file}.tmp`;
+    fs.writeFileSync(tmpFile, `${JSON.stringify(next, null, 2)}\n`);
+    fs.renameSync(tmpFile, file);
     return next;
 }
 export function generateJobId(prefix = "job") {

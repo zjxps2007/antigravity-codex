@@ -1,0 +1,37 @@
+---
+description: Delegate investigation or implementation work to Codex
+argument-hint: '[--wait|--background] [--write] [--resume] [--model <model>] [--effort minimal|low|medium|high|xhigh] <prompt>'
+disable-model-invocation: true
+allowed-tools: Bash(node:*)
+---
+
+Delegate a task to Codex through the Antigravity companion.
+
+Raw slash-command arguments: `$ARGUMENTS`
+
+Execution rules:
+
+- Default execution is read-only.
+- Only pass `--write` when the user explicitly included it in the slash-command arguments.
+- Preserve the user's raw command arguments exactly.
+- Return Codex output verbatim. Do not summarize or add commentary.
+
+Run:
+
+```bash
+PLUGIN_ROOT="${AGY_CODEX_PLUGIN_ROOT:-${ANTIGRAVITY_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-}}}"
+SCRIPT=""
+if [ -n "$PLUGIN_ROOT" ] && [ -f "$PLUGIN_ROOT/dist/agy-codex.mjs" ]; then
+  SCRIPT="$PLUGIN_ROOT/dist/agy-codex.mjs"
+elif [ -f "dist/agy-codex.mjs" ]; then
+  SCRIPT="$(pwd)/dist/agy-codex.mjs"
+elif [ -f "$HOME/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs" ]; then
+  SCRIPT="$HOME/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs"
+elif [ -f "$HOME/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs" ]; then
+  SCRIPT="$HOME/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs"
+else
+  echo "Could not find dist/agy-codex.mjs. Run agy plugin install . from the plugin checkout."
+  exit 1
+fi
+node "$SCRIPT" rescue "$ARGUMENTS"
+```

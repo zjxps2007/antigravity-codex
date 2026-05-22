@@ -17,16 +17,19 @@ export function splitRawArgumentString(raw: unknown): string[] {
   let current = "";
   let quote: '"' | "'" | null = null;
   let escaping = false;
+  let inWord = false;
 
   for (const char of input) {
     if (escaping) {
       current += char;
       escaping = false;
+      inWord = true;
       continue;
     }
 
     if (char === "\\") {
       escaping = true;
+      inWord = true;
       continue;
     }
 
@@ -41,18 +44,21 @@ export function splitRawArgumentString(raw: unknown): string[] {
 
     if (char === '"' || char === "'") {
       quote = char;
+      inWord = true;
       continue;
     }
 
     if (/\s/.test(char)) {
-      if (current) {
+      if (inWord) {
         parts.push(current);
         current = "";
+        inWord = false;
       }
       continue;
     }
 
     current += char;
+    inWord = true;
   }
 
   if (escaping) {
@@ -61,7 +67,7 @@ export function splitRawArgumentString(raw: unknown): string[] {
   if (quote) {
     throw new Error(`Unclosed ${quote} quote in arguments.`);
   }
-  if (current) {
+  if (inWord) {
     parts.push(current);
   }
   return parts;

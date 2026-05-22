@@ -1,13 +1,13 @@
 ---
 name: codex-status
-description: Shows running and recent Antigravity Codex background jobs for the current workspace. Use when the user asks for Codex status, progress, jobs, or background task state.
+description: Fallback skill for explicit Codex job status checks. Prefer the /codex:status slash command when commands are available.
 ---
 
 # Codex Status
 
 Show job status through the companion script.
 
-Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, as the installed plugin path under `~/.gemini/antigravity-cli/plugins/codex/dist/agy-codex.mjs`, or as the older fallback path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Command:
 
