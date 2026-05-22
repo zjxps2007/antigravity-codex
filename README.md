@@ -1,5 +1,7 @@
 # Antigravity Codex
 
+한국어 문서: [README.ko.md](README.ko.md)
+
 Antigravity plugin that delegates code review and background engineering tasks to the local OpenAI Codex CLI.
 
 ## Requirements
@@ -34,4 +36,3 @@ node scripts/agy-codex.mjs cancel
 ```
 
 Use `--background` on `review`, `adversarial-review`, or `task` to queue work and return immediately.
-
