@@ -18,6 +18,7 @@ codex login
 ## Local Development
 
 ```bash
+npm install
 npm test
 agy plugin validate .
 agy plugin install .
@@ -26,13 +27,13 @@ agy plugin install .
 ## Companion Commands
 
 ```bash
-node scripts/agy-codex.mjs setup
-node scripts/agy-codex.mjs review --wait
-node scripts/agy-codex.mjs adversarial-review --base main "focus on auth boundaries"
-node scripts/agy-codex.mjs task --write "fix the failing test"
-node scripts/agy-codex.mjs status
-node scripts/agy-codex.mjs result
-node scripts/agy-codex.mjs cancel
+node dist/agy-codex.mjs setup
+node dist/agy-codex.mjs review --wait
+node dist/agy-codex.mjs adversarial-review --base main "focus on auth boundaries"
+node dist/agy-codex.mjs task --write "fix the failing test"
+node dist/agy-codex.mjs status
+node dist/agy-codex.mjs result
+node dist/agy-codex.mjs cancel
 ```
 
 Use `--background` on `review`, `adversarial-review`, or `task` to queue work and return immediately.

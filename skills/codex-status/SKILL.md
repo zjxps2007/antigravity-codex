@@ -7,7 +7,7 @@ description: Shows running and recent Antigravity Codex background jobs for the 
 
 Show job status through the companion script.
 
-Resolve `<companion-script>` as `scripts/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/scripts/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Command:
 

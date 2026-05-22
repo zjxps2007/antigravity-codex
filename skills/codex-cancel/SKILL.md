@@ -7,7 +7,7 @@ description: Cancels an active Antigravity Codex background job. Use when the us
 
 Cancel a background Codex job through the companion script.
 
-Resolve `<companion-script>` as `scripts/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/scripts/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Command:
 

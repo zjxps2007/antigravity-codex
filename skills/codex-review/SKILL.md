@@ -7,7 +7,7 @@ description: Runs a read-only Codex code review against the current git workspac
 
 Run a read-only Codex review through the companion script.
 
-Resolve `<companion-script>` as `scripts/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/scripts/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Use `--background` for anything larger than a tiny change. Use `--wait` only when the user explicitly asks to wait or the diff is clearly small.
 

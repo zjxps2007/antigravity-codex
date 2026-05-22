@@ -9,8 +9,12 @@
     "node": ">=18.18.0"
   },
   "scripts": {
-    "test": "node --test tests/*.test.mjs",
-    "validate": "agy plugin validate ."
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "validate": "npm run build && agy plugin validate ."
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^6.0.3"
   }
 }
-

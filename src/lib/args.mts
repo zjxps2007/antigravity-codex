@@ -1,8 +1,21 @@
-export function splitRawArgumentString(raw) {
+export type ParsedOptionValue = boolean | string;
+
+export interface ParseArgsConfig {
+  valueOptions?: readonly string[];
+  booleanOptions?: readonly string[];
+  aliasMap?: Readonly<Record<string, string>>;
+}
+
+export interface ParsedArgs {
+  options: Record<string, ParsedOptionValue>;
+  positionals: string[];
+}
+
+export function splitRawArgumentString(raw: unknown): string[] {
   const input = String(raw ?? "");
-  const parts = [];
+  const parts: string[] = [];
   let current = "";
-  let quote = null;
+  let quote: '"' | "'" | null = null;
   let escaping = false;
 
   for (const char of input) {
@@ -54,23 +67,27 @@ export function splitRawArgumentString(raw) {
   return parts;
 }
 
-function normalizeArgv(argv) {
+function normalizeArgv(argv: readonly string[]): string[] {
   if (argv.length === 1 && /\s/.test(argv[0] ?? "")) {
     return splitRawArgumentString(argv[0]);
   }
-  return argv;
+  return [...argv];
 }
 
-export function parseArgs(argv, config = {}) {
+export function parseArgs(argv: readonly string[], config: ParseArgsConfig = {}): ParsedArgs {
   const valueOptions = new Set(config.valueOptions ?? []);
   const booleanOptions = new Set(config.booleanOptions ?? []);
   const aliasMap = config.aliasMap ?? {};
   const normalized = normalizeArgv(argv);
-  const options = {};
-  const positionals = [];
+  const options: Record<string, ParsedOptionValue> = {};
+  const positionals: string[] = [];
 
   for (let i = 0; i < normalized.length; i += 1) {
     const token = normalized[i];
+    if (token === undefined) {
+      continue;
+    }
+
     if (token === "--") {
       positionals.push(...normalized.slice(i + 1));
       break;
@@ -94,7 +111,7 @@ export function parseArgs(argv, config = {}) {
         if (i >= normalized.length) {
           throw new Error(`Missing value for --${key}.`);
         }
-        options[key] = normalized[i];
+        options[key] = normalized[i] ?? "";
       } else {
         options[key] = true;
       }
@@ -111,7 +128,7 @@ export function parseArgs(argv, config = {}) {
         if (i >= normalized.length) {
           throw new Error(`Missing value for -${alias}.`);
         }
-        options[key] = normalized[i];
+        options[key] = normalized[i] ?? "";
       }
       continue;
     }

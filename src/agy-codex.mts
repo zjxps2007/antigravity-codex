@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-import { spawn, spawnSync } from "node:child_process";
+import { spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
-import { parseArgs } from "./lib/args.mjs";
+import { parseArgs, type ParsedOptionValue } from "./lib/args.mjs";
 import {
   findJob,
   findLatestResultJob,
@@ -14,17 +14,68 @@ import {
   nowIso,
   readJobArtifact,
   resolveWorkspaceRoot,
+  type CodexRequest,
+  type Job,
+  type JobStatus,
   upsertJob,
   writeJobArtifact
 } from "./lib/state.mjs";
 
+type CliOptions = Record<string, ParsedOptionValue | undefined>;
+
+interface CommandAvailability {
+  available: boolean;
+  command: string;
+  status: number | null;
+  stdout: string;
+  stderr: string;
+  error: string | null;
+}
+
+interface CommandResolution {
+  command: string;
+  result: SpawnSyncReturns<string>;
+}
+
+interface CodexInvocation {
+  command: string;
+  args: string[];
+}
+
+interface ProcessResult {
+  code: number;
+  signal: NodeJS.Signals | null;
+  stdout: string;
+  stderr: string;
+  logFile: string;
+}
+
+interface ExecutionOptions {
+  stream?: boolean;
+  background?: boolean;
+}
+
+interface JobIdentity {
+  id: string;
+  logFile?: string;
+}
+
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT_DIR = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const REVIEW_SCHEMA = path.join(ROOT_DIR, "schemas", "review-output.schema.json");
-const MODEL_ALIASES = new Map([["spark", "gpt-5.3-codex-spark"]]);
+const MODEL_ALIASES = new Map<string, string>([["spark", "gpt-5.3-codex-spark"]]);
 const VALID_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
 
-function commandCandidates(command) {
+function optionString(options: CliOptions, key: string): string | undefined {
+  const value = options[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+function optionBool(options: CliOptions, key: string): boolean {
+  return options[key] === true;
+}
+
+function commandCandidates(command: string): string[] {
   if (command === "node") {
     return [process.execPath, "node.exe", "node"];
   }
@@ -37,11 +88,11 @@ function commandCandidates(command) {
   return [`${command}.cmd`, `${command}.exe`, command];
 }
 
-function shouldUseShell(command) {
+function shouldUseShell(command: string): boolean {
   return process.platform === "win32" && /\.(cmd|bat)$/i.test(command);
 }
 
-function resolveExecutable(command, args = ["--version"], cwd = process.cwd()) {
+function resolveExecutable(command: string, args = ["--version"], cwd = process.cwd()): CommandResolution {
   for (const candidate of commandCandidates(command)) {
     const result = spawnSync(candidate, args, {
       cwd,
@@ -49,22 +100,21 @@ function resolveExecutable(command, args = ["--version"], cwd = process.cwd()) {
       windowsHide: true,
       shell: shouldUseShell(candidate)
     });
-    if (!result.error || result.error.code !== "ENOENT") {
+    const errorCode = (result.error as NodeJS.ErrnoException | undefined)?.code;
+    if (!result.error || errorCode !== "ENOENT") {
       return { command: candidate, result };
     }
   }
-  return {
-    command,
-    result: {
-      status: null,
-      stdout: "",
-      stderr: "",
-      error: new Error(`Unable to find ${command} on PATH.`)
-    }
-  };
+  const result = {
+    status: null,
+    stdout: "",
+    stderr: "",
+    error: new Error(`Unable to find ${command} on PATH.`)
+  } as SpawnSyncReturns<string>;
+  return { command, result };
 }
 
-function resolveCodexInvocation(cwd = process.cwd()) {
+function resolveCodexInvocation(cwd = process.cwd()): CodexInvocation {
   if (process.env.CODEX_BIN) {
     if (/\.js$/i.test(process.env.CODEX_BIN)) {
       return { command: process.execPath, args: [process.env.CODEX_BIN] };
@@ -74,7 +124,8 @@ function resolveCodexInvocation(cwd = process.cwd()) {
 
   if (process.platform === "win32") {
     const found = spawnSync("where.exe", ["codex"], { cwd, encoding: "utf8", windowsHide: true });
-    const paths = found.status === 0 ? found.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+    const paths =
+      found.status === 0 ? found.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
     for (const candidate of paths) {
       if (/\.exe$/i.test(candidate)) {
         return { command: candidate, args: [] };
@@ -89,7 +140,7 @@ function resolveCodexInvocation(cwd = process.cwd()) {
   return { command: "codex", args: [] };
 }
 
-function codexAvailable(cwd = process.cwd()) {
+function codexAvailable(cwd = process.cwd()): CommandAvailability {
   const invocation = resolveCodexInvocation(cwd);
   const result = spawnSync(invocation.command, [...invocation.args, "--version"], {
     cwd,
@@ -107,33 +158,33 @@ function codexAvailable(cwd = process.cwd()) {
   };
 }
 
-function usage() {
+function usage(): void {
   console.log(`Usage:
-  node scripts/agy-codex.mjs setup [--json]
-  node scripts/agy-codex.mjs review [--wait|--background] [--base <ref>|--commit <sha>] [--model <model>] [prompt]
-  node scripts/agy-codex.mjs adversarial-review [--wait|--background] [--base <ref>] [--model <model>] [focus text]
-  node scripts/agy-codex.mjs task [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
-  node scripts/agy-codex.mjs status [job-id] [--json]
-  node scripts/agy-codex.mjs result [job-id] [--json]
-  node scripts/agy-codex.mjs cancel [job-id] [--json]`);
+  node dist/agy-codex.mjs setup [--json]
+  node dist/agy-codex.mjs review [--wait|--background] [--base <ref>|--commit <sha>] [--model <model>] [prompt]
+  node dist/agy-codex.mjs adversarial-review [--wait|--background] [--base <ref>] [--model <model>] [focus text]
+  node dist/agy-codex.mjs task [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
+  node dist/agy-codex.mjs status [job-id] [--json]
+  node dist/agy-codex.mjs result [job-id] [--json]
+  node dist/agy-codex.mjs cancel [job-id] [--json]`);
 }
 
-function normalizeModel(model) {
+function normalizeModel(model: string | undefined): string | null {
   if (!model) return null;
-  const trimmed = String(model).trim();
+  const trimmed = model.trim();
   return MODEL_ALIASES.get(trimmed.toLowerCase()) ?? trimmed;
 }
 
-function normalizeEffort(effort) {
+function normalizeEffort(effort: string | undefined): string | null {
   if (!effort) return null;
-  const normalized = String(effort).trim().toLowerCase();
+  const normalized = effort.trim().toLowerCase();
   if (!VALID_EFFORTS.has(normalized)) {
     throw new Error(`Unsupported effort "${effort}". Use one of: ${[...VALID_EFFORTS].join(", ")}.`);
   }
   return normalized;
 }
 
-function commandAvailable(command, args = ["--version"], cwd = process.cwd()) {
+function commandAvailable(command: string, args = ["--version"], cwd = process.cwd()): CommandAvailability {
   const { command: resolvedCommand, result } = resolveExecutable(command, args, cwd);
   return {
     available: result.status === 0,
@@ -145,27 +196,29 @@ function commandAvailable(command, args = ["--version"], cwd = process.cwd()) {
   };
 }
 
-function codexConfigArg(key, value) {
-  return ["-c", `${key}="${String(value).replaceAll('"', '\\"')}"`];
+function codexConfigArg(key: string, value: string): string[] {
+  return ["-c", `${key}="${value.replaceAll('"', '\\"')}"`];
 }
 
-function addRuntimeOptions(args, options) {
-  const model = normalizeModel(options.model);
-  const effort = normalizeEffort(options.effort);
+function addRuntimeOptions(args: string[], options: CliOptions): string[] {
+  const model = normalizeModel(optionString(options, "model"));
+  const effort = normalizeEffort(optionString(options, "effort"));
   if (model) args.push("-m", model);
   if (effort) args.push(...codexConfigArg("model_reasoning_effort", effort));
   return args;
 }
 
-function buildReviewRequest(cwd, options, positionals) {
+function buildReviewRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest {
   const codex = resolveCodexInvocation(cwd);
   const args = ["exec", "review"];
   addRuntimeOptions(args, options);
 
-  if (options.base) {
-    args.push("--base", options.base);
-  } else if (options.commit) {
-    args.push("--commit", options.commit);
+  const base = optionString(options, "base");
+  const commit = optionString(options, "commit");
+  if (base) {
+    args.push("--base", base);
+  } else if (commit) {
+    args.push("--commit", commit);
   } else {
     args.push("--uncommitted");
   }
@@ -173,7 +226,7 @@ function buildReviewRequest(cwd, options, positionals) {
   const prompt = positionals.join(" ").trim();
   if (prompt) args.push(prompt);
 
-  const target = options.base ? `base ${options.base}` : options.commit ? `commit ${options.commit}` : "uncommitted changes";
+  const target = base ? `base ${base}` : commit ? `commit ${commit}` : "uncommitted changes";
   return {
     cwd,
     command: codex.command,
@@ -184,9 +237,10 @@ function buildReviewRequest(cwd, options, positionals) {
   };
 }
 
-function buildAdversarialPrompt(options, focusText) {
-  const target = options.base
-    ? `Review this branch against base ref "${options.base}".`
+function buildAdversarialPrompt(options: CliOptions, focusText: string): string {
+  const base = optionString(options, "base");
+  const target = base
+    ? `Review this branch against base ref "${base}".`
     : "Review the current staged, unstaged, and untracked changes.";
   const focus = focusText || "No extra focus was provided.";
   return [
@@ -198,7 +252,7 @@ function buildAdversarialPrompt(options, focusText) {
   ].join("\n");
 }
 
-function buildAdversarialRequest(cwd, options, positionals) {
+function buildAdversarialRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest {
   const codex = resolveCodexInvocation(cwd);
   const prompt = buildAdversarialPrompt(options, positionals.join(" ").trim());
   const args = ["exec", "--sandbox", "read-only", "--ask-for-approval", "never"];
@@ -208,25 +262,26 @@ function buildAdversarialRequest(cwd, options, positionals) {
   }
   args.push(prompt);
 
+  const base = optionString(options, "base");
   return {
     cwd,
     command: codex.command,
     args: [...codex.args, ...args],
     title: "Codex Adversarial Review",
     kind: "adversarial-review",
-    summary: options.base ? `Adversarial review against ${options.base}` : "Adversarial review of working tree"
+    summary: base ? `Adversarial review against ${base}` : "Adversarial review of working tree"
   };
 }
 
-function buildTaskRequest(cwd, options, positionals) {
+function buildTaskRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest {
   const codex = resolveCodexInvocation(cwd);
   const prompt = positionals.join(" ").trim();
-  if (!prompt && !options.resume) {
+  if (!prompt && !optionBool(options, "resume")) {
     throw new Error("Provide a task prompt, or pass --resume to continue the latest Codex session.");
   }
 
-  const args = options.resume ? ["exec", "resume", "--last"] : ["exec"];
-  args.push("--sandbox", options.write ? "workspace-write" : "read-only", "--ask-for-approval", "never");
+  const args = optionBool(options, "resume") ? ["exec", "resume", "--last"] : ["exec"];
+  args.push("--sandbox", optionBool(options, "write") ? "workspace-write" : "read-only", "--ask-for-approval", "never");
   addRuntimeOptions(args, options);
   if (prompt) args.push(prompt);
 
@@ -234,20 +289,20 @@ function buildTaskRequest(cwd, options, positionals) {
     cwd,
     command: codex.command,
     args: [...codex.args, ...args],
-    title: options.resume ? "Codex Resume" : "Codex Task",
+    title: optionBool(options, "resume") ? "Codex Resume" : "Codex Task",
     kind: "task",
     summary: prompt ? prompt.slice(0, 140) : "Resume latest Codex session",
-    write: Boolean(options.write)
+    write: optionBool(options, "write")
   };
 }
 
-function createLogFile(cwd, jobId) {
+function createLogFile(cwd: string, jobId: string): string {
   const dir = jobDir(cwd, jobId);
   fs.mkdirSync(dir, { recursive: true });
   return path.join(dir, "log.txt");
 }
 
-function runProcess(request, job, { stream = true } = {}) {
+function runProcess(request: CodexRequest, job: JobIdentity, { stream = true }: ExecutionOptions = {}): Promise<ProcessResult> {
   const logFile = job.logFile ?? createLogFile(request.cwd, job.id);
   return new Promise((resolve) => {
     const child = spawn(request.command, request.args, {
@@ -267,7 +322,7 @@ function runProcess(request, job, { stream = true } = {}) {
 
     let stdout = "";
     let stderr = "";
-    const append = (chunk, isErr = false) => {
+    const append = (chunk: Buffer | string, isErr = false): void => {
       const text = chunk.toString();
       if (isErr) stderr += text;
       else stdout += text;
@@ -277,8 +332,8 @@ function runProcess(request, job, { stream = true } = {}) {
       }
     };
 
-    child.stdout.on("data", (chunk) => append(chunk));
-    child.stderr.on("data", (chunk) => append(chunk, true));
+    child.stdout?.on("data", (chunk: Buffer) => append(chunk));
+    child.stderr?.on("data", (chunk: Buffer) => append(chunk, true));
     child.on("error", (error) => {
       stderr += `${error.message}\n`;
       fs.appendFileSync(logFile, `${error.message}\n`);
@@ -289,7 +344,11 @@ function runProcess(request, job, { stream = true } = {}) {
   });
 }
 
-async function executeTrackedRequest(request, job, options = {}) {
+async function executeTrackedRequest(
+  request: CodexRequest,
+  job: JobIdentity,
+  options: ExecutionOptions = {}
+): Promise<ProcessResult> {
   upsertJob(request.cwd, {
     id: job.id,
     kind: request.kind,
@@ -308,7 +367,7 @@ async function executeTrackedRequest(request, job, options = {}) {
   writeJobArtifact(request.cwd, job.id, "stderr.txt", result.stderr);
   writeJobArtifact(request.cwd, job.id, "result.json", result);
 
-  const status = result.code === 0 ? "completed" : "failed";
+  const status: JobStatus = result.code === 0 ? "completed" : "failed";
   upsertJob(request.cwd, {
     id: job.id,
     status,
@@ -326,7 +385,7 @@ async function executeTrackedRequest(request, job, options = {}) {
   return result;
 }
 
-function queueBackground(request) {
+function queueBackground(request: CodexRequest): Job {
   const jobId = generateJobId(request.kind === "task" ? "task" : "review");
   const logFile = createLogFile(request.cwd, jobId);
   const job = upsertJob(request.cwd, {
@@ -351,19 +410,18 @@ function queueBackground(request) {
   });
   child.unref();
 
-  upsertJob(request.cwd, { id: job.id, pid: child.pid ?? null, status: "queued", phase: "queued" });
-  return { ...job, pid: child.pid ?? null };
+  return upsertJob(request.cwd, { id: job.id, pid: child.pid ?? null, status: "queued", phase: "queued" });
 }
 
-async function runForeground(request) {
-  const job = {
+async function runForeground(request: CodexRequest): Promise<void> {
+  const job: JobIdentity = {
     id: generateJobId(request.kind === "task" ? "task" : "review")
   };
   job.logFile = createLogFile(request.cwd, job.id);
   await executeTrackedRequest(request, job, { stream: true });
 }
 
-function printQueued(job, asJson = false) {
+function printQueued(job: Job, asJson = false): void {
   const payload = {
     jobId: job.id,
     status: "queued",
@@ -375,32 +433,34 @@ function printQueued(job, asJson = false) {
   if (asJson) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
-    console.log(`${job.title} started in the background as ${job.id}.`);
-    console.log(`Check progress with: node scripts/agy-codex.mjs status ${job.id}`);
+    console.log(`${job.title ?? "Codex job"} started in the background as ${job.id}.`);
+    console.log(`Check progress with: node dist/agy-codex.mjs status ${job.id}`);
   }
 }
 
-async function handleWorker(argv) {
+async function handleWorker(argv: string[]): Promise<void> {
   const { options } = parseArgs(argv, { valueOptions: ["cwd", "job-id"] });
-  if (!options.cwd || !options["job-id"]) {
+  const cwd = optionString(options, "cwd");
+  const jobId = optionString(options, "job-id");
+  if (!cwd || !jobId) {
     throw new Error("worker requires --cwd and --job-id.");
   }
-  const job = findJob(options.cwd, options["job-id"]);
+  const job = findJob(cwd, jobId);
   if (!job?.request) {
-    throw new Error(`No queued request found for ${options["job-id"]}.`);
+    throw new Error(`No queued request found for ${jobId}.`);
   }
   await executeTrackedRequest(job.request, job, { stream: false, background: true });
 }
 
-async function runMaybeBackground(request, options) {
-  if (options.background) {
-    printQueued(queueBackground(request), Boolean(options.json));
+async function runMaybeBackground(request: CodexRequest, options: CliOptions): Promise<void> {
+  if (optionBool(options, "background")) {
+    printQueued(queueBackground(request), optionBool(options, "json"));
     return;
   }
   await runForeground(request);
 }
 
-async function handleSetup(argv) {
+async function handleSetup(argv: string[]): Promise<void> {
   const { options } = parseArgs(argv, { booleanOptions: ["json"] });
   const cwd = process.cwd();
   const node = commandAvailable("node", ["--version"], cwd);
@@ -414,12 +474,12 @@ async function handleSetup(argv) {
     nextSteps: ready ? [] : ["Install Codex with `npm install -g @openai/codex` and run `codex login`."]
   };
 
-  if (options.json) {
+  if (optionBool(options, "json")) {
     console.log(JSON.stringify(payload, null, 2));
     return;
   }
 
-  console.log(`# Antigravity Codex setup`);
+  console.log("# Antigravity Codex setup");
   console.log(`Node: ${node.available ? node.stdout : "missing"}`);
   console.log(`Codex: ${codex.available ? codex.stdout : "missing"}`);
   console.log(`Workspace: ${payload.workspaceRoot}`);
@@ -427,43 +487,43 @@ async function handleSetup(argv) {
   for (const step of payload.nextSteps) console.log(`- ${step}`);
 }
 
-async function handleReview(argv, adversarial = false) {
+async function handleReview(argv: string[], adversarial = false): Promise<void> {
   const { options, positionals } = parseArgs(argv, {
     valueOptions: ["base", "commit", "model", "cwd", "effort"],
     booleanOptions: ["wait", "background", "json"],
     aliasMap: { m: "model" }
   });
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   const request = adversarial
     ? buildAdversarialRequest(cwd, options, positionals)
     : buildReviewRequest(cwd, options, positionals);
   await runMaybeBackground(request, options);
 }
 
-async function handleTask(argv) {
+async function handleTask(argv: string[]): Promise<void> {
   const { options, positionals } = parseArgs(argv, {
     valueOptions: ["model", "cwd", "effort"],
     booleanOptions: ["wait", "background", "json", "write", "resume"],
     aliasMap: { m: "model" }
   });
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   const request = buildTaskRequest(cwd, options, positionals);
   await runMaybeBackground(request, options);
 }
 
-function renderStatus(job) {
-  return `${job.id}\t${job.kind}\t${job.status}\t${job.pid ?? ""}\t${job.summary ?? ""}`;
+function renderStatus(job: Job): string {
+  return `${job.id}\t${job.kind ?? ""}\t${job.status ?? ""}\t${job.pid ?? ""}\t${job.summary ?? ""}`;
 }
 
-function handleStatus(argv) {
+function handleStatus(argv: string[]): void {
   const { options, positionals } = parseArgs(argv, {
     valueOptions: ["cwd"],
     booleanOptions: ["json"]
   });
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   const reference = positionals[0] ?? "";
-  const jobs = reference ? [findJob(cwd, reference)].filter(Boolean) : listJobs(cwd).slice(0, 12);
-  if (options.json) {
+  const jobs = reference ? [findJob(cwd, reference)].filter((job): job is Job => Boolean(job)) : listJobs(cwd).slice(0, 12);
+  if (optionBool(options, "json")) {
     console.log(JSON.stringify(jobs, null, 2));
     return;
   }
@@ -475,12 +535,12 @@ function handleStatus(argv) {
   for (const job of jobs) console.log(renderStatus(job));
 }
 
-function handleResult(argv) {
+function handleResult(argv: string[]): void {
   const { options, positionals } = parseArgs(argv, {
     valueOptions: ["cwd"],
     booleanOptions: ["json"]
   });
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   const job = findLatestResultJob(cwd, positionals[0] ?? "");
   if (!job) {
     throw new Error("No completed Codex job found for this workspace.");
@@ -488,7 +548,7 @@ function handleResult(argv) {
   const stdout = readJobArtifact(cwd, job.id, "stdout.txt") ?? "";
   const stderr = readJobArtifact(cwd, job.id, "stderr.txt") ?? "";
   const payload = { job, stdout, stderr };
-  if (options.json) {
+  if (optionBool(options, "json")) {
     console.log(JSON.stringify(payload, null, 2));
     return;
   }
@@ -498,7 +558,7 @@ function handleResult(argv) {
   }
 }
 
-function killProcessTree(pid) {
+function killProcessTree(pid: number | null | undefined): void {
   if (!pid) return;
   if (process.platform === "win32") {
     spawnSync("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore", windowsHide: true });
@@ -515,16 +575,16 @@ function killProcessTree(pid) {
   }
 }
 
-function handleCancel(argv) {
+function handleCancel(argv: string[]): void {
   const { options, positionals } = parseArgs(argv, {
     valueOptions: ["cwd"],
     booleanOptions: ["json"]
   });
-  const cwd = path.resolve(options.cwd ?? process.cwd());
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   const reference = positionals[0] ?? "";
   const job =
     findJob(cwd, reference) ??
-    listJobs(cwd).find((candidate) => ["queued", "running"].includes(candidate.status));
+    listJobs(cwd).find((candidate) => ["queued", "running"].includes(candidate.status ?? ""));
   if (!job) {
     throw new Error("No active Codex job found to cancel.");
   }
@@ -536,14 +596,14 @@ function handleCancel(argv) {
     pid: null,
     completedAt: nowIso()
   });
-  if (options.json) {
+  if (optionBool(options, "json")) {
     console.log(JSON.stringify(next, null, 2));
   } else {
     console.log(`Cancelled ${job.id}.`);
   }
 }
 
-async function main() {
+async function main(): Promise<void> {
   const [subcommand, ...argv] = process.argv.slice(2);
   switch (subcommand) {
     case "setup":
@@ -580,7 +640,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+main().catch((error: unknown) => {
   process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
   process.exitCode = 1;
 });

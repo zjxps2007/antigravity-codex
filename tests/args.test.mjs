@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, splitRawArgumentString } from "../scripts/lib/args.mjs";
+import { parseArgs, splitRawArgumentString } from "../dist/lib/args.mjs";
 
 test("splitRawArgumentString handles quotes and escapes", () => {
   assert.deepEqual(splitRawArgumentString('--base main "focus on auth" one\\ two'), [
@@ -24,4 +24,3 @@ test("parseArgs handles booleans, values, aliases, and positionals", () => {
   });
   assert.deepEqual(parsed.positionals, ["focus"]);
 });
-

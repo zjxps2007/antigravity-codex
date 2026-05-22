@@ -7,7 +7,7 @@ description: Runs a skeptical read-only Codex review that challenges design choi
 
 Run an adversarial read-only review through the companion script. This review must not edit files.
 
-Resolve `<companion-script>` as `scripts/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/scripts/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Supported arguments:
 

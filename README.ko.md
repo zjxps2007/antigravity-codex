@@ -18,6 +18,7 @@ codex login
 ## 로컬 개발
 
 ```bash
+npm install
 npm test
 agy plugin validate .
 agy plugin install .
@@ -26,13 +27,13 @@ agy plugin install .
 ## Companion 명령
 
 ```bash
-node scripts/agy-codex.mjs setup
-node scripts/agy-codex.mjs review --wait
-node scripts/agy-codex.mjs adversarial-review --base main "인증 경계를 중점적으로 검토"
-node scripts/agy-codex.mjs task --write "실패하는 테스트 수정"
-node scripts/agy-codex.mjs status
-node scripts/agy-codex.mjs result
-node scripts/agy-codex.mjs cancel
+node dist/agy-codex.mjs setup
+node dist/agy-codex.mjs review --wait
+node dist/agy-codex.mjs adversarial-review --base main "인증 경계를 중점적으로 검토"
+node dist/agy-codex.mjs task --write "실패하는 테스트 수정"
+node dist/agy-codex.mjs status
+node dist/agy-codex.mjs result
+node dist/agy-codex.mjs cancel
 ```
 
 `review`, `adversarial-review`, `task`에 `--background`를 붙이면 작업을 큐에 넣고 즉시 job id를 반환합니다.

@@ -7,7 +7,7 @@ description: Delegates an investigation or implementation task to Codex from Ant
 
 Delegate the user's task to Codex through the companion script.
 
-Resolve `<companion-script>` as `scripts/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/scripts/agy-codex.mjs`.
+Resolve `<companion-script>` as `dist/agy-codex.mjs` in this checkout, or as the installed plugin path under `~/.gemini/antigravity-cli/plugins/antigravity-codex/dist/agy-codex.mjs`.
 
 Default behavior is read-only. Add `--write` only if the user asks Codex to modify files or fix code.
 

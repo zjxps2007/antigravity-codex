@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listJobs, readJobArtifact, upsertJob, writeJobArtifact } from "../scripts/lib/state.mjs";
+import { listJobs, readJobArtifact, upsertJob, writeJobArtifact } from "../dist/lib/state.mjs";
 
 test("state stores jobs and artifacts under AGY_CODEX_DATA", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-test-"));
@@ -22,4 +22,3 @@ test("state stores jobs and artifacts under AGY_CODEX_DATA", () => {
   assert.equal(jobs[0].id, "job-1");
   assert.equal(readJobArtifact(workspace, "job-1", "stdout.txt"), "ok\n");
 });
-

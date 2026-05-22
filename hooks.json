@@ -4,10 +4,9 @@
     "Stop": [
       {
         "type": "command",
-        "command": "node scripts/stop-review-gate-hook.mjs",
+        "command": "node dist/stop-review-gate-hook.mjs",
         "timeout": 30
       }
     ]
   }
 }
-
