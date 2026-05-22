@@ -1,0 +1,8 @@
+{
+  "name": "codex",
+  "description": "Use Codex from Antigravity to review code or delegate tasks.",
+  "version": "0.1.0",
+  "author": {
+    "name": "OpenAI"
+  }
+}
