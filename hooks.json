@@ -1,0 +1,13 @@
+{
+  "codex-stop-review-gate": {
+    "enabled": false,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "node scripts/stop-review-gate-hook.mjs",
+        "timeout": 30
+      }
+    ]
+  }
+}
+

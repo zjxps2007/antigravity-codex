@@ -1,0 +1,5 @@
+node_modules/
+.agy-codex-data/
+coverage/
+*.log
+

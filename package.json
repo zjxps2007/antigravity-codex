@@ -1,0 +1,16 @@
+{
+  "name": "antigravity-codex",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Antigravity plugin that delegates reviews and tasks to the local Codex CLI.",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "validate": "agy plugin validate ."
+  }
+}
+
