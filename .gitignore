@@ -1,5 +1,5 @@
 node_modules/
 .agy-codex-data/
 coverage/
+dist-tests/
 *.log
-

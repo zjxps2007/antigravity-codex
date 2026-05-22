@@ -4,6 +4,8 @@
 
 Antigravity plugin that delegates code review and background engineering tasks to the local OpenAI Codex CLI.
 
+Handwritten source lives in TypeScript under `src/` and `tests/`. The committed `dist/` files are generated runtime output for Antigravity plugin installs.
+
 ## Requirements
 
 - Antigravity CLI with plugin support

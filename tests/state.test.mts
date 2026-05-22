@@ -19,6 +19,7 @@ test("state stores jobs and artifacts under AGY_CODEX_DATA", () => {
 
   const jobs = listJobs(workspace);
   assert.equal(jobs.length, 1);
-  assert.equal(jobs[0].id, "job-1");
+  assert.equal(jobs[0]?.id, "job-1");
   assert.equal(readJobArtifact(workspace, "job-1", "stdout.txt"), "ok\n");
 });
+

@@ -2,6 +2,8 @@
 
 Antigravity에서 로컬 OpenAI Codex CLI를 호출해 코드 리뷰와 백그라운드 엔지니어링 작업을 위임하는 플러그인입니다.
 
+직접 작성하는 소스는 `src/`와 `tests/` 아래 TypeScript로 관리합니다. 커밋된 `dist/` 파일은 Antigravity 플러그인 설치 후 바로 실행하기 위한 빌드 산출물입니다.
+
 English documentation: [README.md](README.md)
 
 ## 요구 사항

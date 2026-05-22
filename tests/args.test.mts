@@ -24,3 +24,4 @@ test("parseArgs handles booleans, values, aliases, and positionals", () => {
   });
   assert.deepEqual(parsed.positionals, ["focus"]);
 });
+
