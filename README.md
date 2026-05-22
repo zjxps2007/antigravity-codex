@@ -34,7 +34,7 @@ For Antigravity CLI users, install directly from the GitHub repository:
 agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 ```
 
-The repository includes both `plugin.json` for local plugin validation and `gemini-extension.json` for GitHub URL installation.
+The repository includes both root `plugin.json` for local Antigravity validation and `.claude-plugin/plugin.json` for GitHub URL installation.
 
 Then run:
 
