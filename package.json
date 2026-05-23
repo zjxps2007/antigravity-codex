@@ -5,6 +5,10 @@
   "type": "module",
   "description": "Antigravity plugin that delegates reviews and tasks to the local Codex CLI.",
   "license": "Apache-2.0",
+  "bin": {
+    "agy-codex": "dist/agy-codex.mjs",
+    "agy-codex-review-gate": "dist/stop-review-gate-hook.mjs"
+  },
   "engines": {
     "node": ">=18.18.0"
   },

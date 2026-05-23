@@ -2,7 +2,7 @@
 description: Run a Codex review that challenges implementation and design choices
 argument-hint: '[--wait|--background] [--base <ref>] [--model <model>] [focus text]'
 disable-model-invocation: true
-allowed-tools: Bash(node:*), Bash(git:*)
+allowed-tools: Bash(node:*), Bash(npx:*), Bash(git:*)
 ---
 
 Run an adversarial Codex review through the Antigravity companion.
@@ -31,9 +31,9 @@ if [ -z "$SCRIPT" ]; then
     if [ -f "$CANDIDATE" ]; then SCRIPT="$CANDIDATE"; break; fi
   done
 fi
-if [ -z "$SCRIPT" ]; then
-  echo "Could not find agy-codex.mjs. Run agy plugin install . from the plugin checkout."
-  exit 1
+if [ -n "$SCRIPT" ]; then
+  node "$SCRIPT" adversarial-review "$ARGUMENTS"
+else
+  AGY_CODEX_PLUGIN_ROOT="$HOME/.gemini/antigravity-cli/plugins/codex" npx -y --package github:zjxps2007/antigravity-codex agy-codex adversarial-review "$ARGUMENTS"
 fi
-node "$SCRIPT" adversarial-review "$ARGUMENTS"
 ```

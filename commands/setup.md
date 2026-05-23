@@ -2,7 +2,7 @@
 description: Check whether the local Codex CLI is ready for Antigravity
 argument-hint: '[--json] [--enable-review-gate|--disable-review-gate]'
 disable-model-invocation: true
-allowed-tools: Bash(node:*)
+allowed-tools: Bash(node:*), Bash(npx:*)
 ---
 
 Run the Antigravity Codex companion setup check.
@@ -33,11 +33,11 @@ if [ -z "$SCRIPT" ]; then
     if [ -f "$CANDIDATE" ]; then SCRIPT="$CANDIDATE"; break; fi
   done
 fi
-if [ -z "$SCRIPT" ]; then
-  echo "Could not find agy-codex.mjs. Run agy plugin install . from the plugin checkout."
-  exit 1
+if [ -n "$SCRIPT" ]; then
+  node "$SCRIPT" setup "$ARGUMENTS"
+else
+  AGY_CODEX_PLUGIN_ROOT="$HOME/.gemini/antigravity-cli/plugins/codex" npx -y --package github:zjxps2007/antigravity-codex agy-codex setup "$ARGUMENTS"
 fi
-node "$SCRIPT" setup "$ARGUMENTS"
 ```
 
 Return the command output verbatim.

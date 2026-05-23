@@ -70,6 +70,8 @@ const REVIEW_SCHEMA_CANDIDATES = [
 const REVIEW_SCHEMA = REVIEW_SCHEMA_CANDIDATES.find((candidate) => fs.existsSync(candidate)) ?? REVIEW_SCHEMA_CANDIDATES[0]!;
 const MODEL_ALIASES = new Map<string, string>([["spark", "gpt-5.3-codex-spark"]]);
 const VALID_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+const NPX_PACKAGE_SPEC = "github:zjxps2007/antigravity-codex";
+const NPX_REVIEW_GATE_COMMAND = `npx -y --package ${NPX_PACKAGE_SPEC} agy-codex-review-gate`;
 
 function resolveRuntimeRoot(startDir: string): string {
   let current = path.resolve(startDir);
@@ -223,15 +225,25 @@ function shellQuote(value: string): string {
 }
 
 function reviewGateHookFile(): string {
-  return path.join(ROOT_DIR, "hooks", "hooks.json");
+  return path.join(reviewGatePluginRoot(), "hooks", "hooks.json");
 }
 
-function reviewGateScriptFile(): string {
+function reviewGatePluginRoot(): string {
+  return path.resolve(process.env.AGY_CODEX_PLUGIN_ROOT || process.env.ANTIGRAVITY_PLUGIN_ROOT || ROOT_DIR);
+}
+
+function reviewGateScriptFile(): string | null {
+  const root = reviewGatePluginRoot();
   const candidates = [
-    path.join(ROOT_DIR, "hooks", "bin", "stop-review-gate-hook.mjs"),
-    path.join(ROOT_DIR, "dist", "stop-review-gate-hook.mjs")
+    path.join(root, "hooks", "bin", "stop-review-gate-hook.mjs"),
+    path.join(root, "dist", "stop-review-gate-hook.mjs")
   ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+function reviewGateCommand(): string {
+  const script = reviewGateScriptFile();
+  return script ? `node ${shellQuote(script)}` : NPX_REVIEW_GATE_COMMAND;
 }
 
 function reviewGateConfig(enabled: boolean): Record<string, unknown> {
@@ -241,7 +253,7 @@ function reviewGateConfig(enabled: boolean): Record<string, unknown> {
       Stop: [
         {
           type: "command",
-          command: `node ${shellQuote(reviewGateScriptFile())}`,
+          command: reviewGateCommand(),
           timeout: 300
         }
       ]
@@ -578,7 +590,7 @@ async function handleSetup(argv: string[]): Promise<void> {
   const reviewGate = {
     enabled: readReviewGateEnabled(),
     hooksFile: reviewGateHookFile(),
-    hookScript: reviewGateScriptFile()
+    hookCommand: reviewGateCommand()
   };
   const payload = {
     ready,

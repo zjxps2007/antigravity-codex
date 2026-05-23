@@ -4,7 +4,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "node hooks/bin/stop-review-gate-hook.mjs",
+        "command": "npx -y --package github:zjxps2007/antigravity-codex agy-codex-review-gate",
         "timeout": 300
       }
     ]
