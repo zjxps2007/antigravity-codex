@@ -147,6 +147,9 @@ function buildReviewRequest(cwd, options, positionals) {
     const args = ["exec", "review"];
     addRuntimeOptions(args, options);
     const prompt = positionals.join(" ").trim();
+    if (prompt) {
+        throw new Error("`review` does not support custom focus text. Use `adversarial-review` when you need focused review instructions.");
+    }
     const base = optionString(options, "base");
     const commit = optionString(options, "commit");
     if (base) {
@@ -155,11 +158,9 @@ function buildReviewRequest(cwd, options, positionals) {
     else if (commit) {
         args.push("--commit", commit);
     }
-    else if (!prompt) {
+    else {
         args.push("--uncommitted");
     }
-    if (prompt)
-        args.push(prompt);
     const target = base ? `base ${base}` : commit ? `commit ${commit}` : "uncommitted changes";
     return {
         cwd,
