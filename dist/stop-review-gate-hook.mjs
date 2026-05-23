@@ -6,6 +6,7 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { appendReviewGateEvent, createReviewGateRunId, nowIso } from "./lib/review-gate-events.mjs";
+import { isReviewGateEnabled } from "./lib/state.mjs";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
 const REVIEW_SCHEMA = path.resolve(SCRIPT_DIR, "..", "schemas", "review-output.schema.json");
@@ -160,6 +161,10 @@ function runCodexReview(cwd) {
 async function main() {
     const input = parseInput(await readStdin());
     const cwd = firstWorkspace(input);
+    if (!isReviewGateEnabled(cwd)) {
+        allow();
+        return;
+    }
     const id = createReviewGateRunId();
     const startedAt = Date.now();
     const baseEvent = { id, workspace: cwd };

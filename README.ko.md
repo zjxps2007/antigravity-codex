@@ -70,6 +70,8 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 `/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
 
+Hook manifest는 정적 파일로 유지되고 패키지용 command만 커밋됩니다. `setup --enable-review-gate`는 로컬 Antigravity Codex 데이터 디렉터리의 workspace별 config만 수정하므로 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다.
+
 `/codex:monitor`는 review gate 실행 이력을 볼 수 있는 로컬 웹 UI를 `http://127.0.0.1:8765`에 띄웁니다. Stop hook은 시작/스킵/Codex 결과/최종 decision 이벤트를 로컬 Antigravity Codex 데이터 디렉터리에 저장하고, monitor는 Codex verdict, finding, raw event를 보여줍니다. 종료하려면 `/codex:monitor --stop`을 사용합니다. 기존 이벤트를 지우려면 `/codex:monitor --clear`를 사용합니다. 서버를 현재 터미널 프로세스에 붙여 실행하려면 `--foreground`를 사용합니다.
 
 ## Companion CLI

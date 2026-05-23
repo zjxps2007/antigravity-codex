@@ -88,3 +88,27 @@ test("monitor clear removes stored review gate events", () => {
   assert.equal(payload.cleared, true);
   assert.equal(fs.existsSync(eventsFile), false);
 });
+
+test("setup stores review gate config outside hooks manifest", () => {
+  const fake = makeFakeCodex();
+  const hooksFile = path.join(repoRoot, "hooks", "hooks.json");
+  const hooksBefore = fs.readFileSync(hooksFile, "utf8");
+  const result = spawnSync(
+    process.execPath,
+    [companion, "setup", "--enable-review-gate", "--json", "--cwd", fake.workspace],
+    {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        AGY_CODEX_DATA: fake.dataRoot,
+        CODEX_BIN: fake.script
+      }
+    }
+  );
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { reviewGate: { enabled: boolean; hooksFile: string; configDir: string } };
+  assert.equal(payload.reviewGate.enabled, true);
+  assert.match(payload.reviewGate.configDir, /workspaces/);
+  assert.equal(fs.readFileSync(hooksFile, "utf8"), hooksBefore);
+});

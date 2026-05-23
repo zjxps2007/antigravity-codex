@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { readReviewGateEvents } from "../dist/lib/review-gate-events.mjs";
+import { setReviewGateEnabled } from "../dist/lib/state.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const hookScript = path.join(repoRoot, "dist", "stop-review-gate-hook.mjs");
@@ -40,7 +41,30 @@ function makeFakeCodex(payload: unknown): string {
   return script;
 }
 
-function runHook(workspace: string, fakeCodex: string, payload: unknown, dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"))) {
+function withDataRoot<T>(dataRoot: string, fn: () => T): T {
+  const previousDataRoot = process.env.AGY_CODEX_DATA;
+  process.env.AGY_CODEX_DATA = dataRoot;
+  try {
+    return fn();
+  } finally {
+    if (previousDataRoot === undefined) {
+      delete process.env.AGY_CODEX_DATA;
+    } else {
+      process.env.AGY_CODEX_DATA = previousDataRoot;
+    }
+  }
+}
+
+function runHook(
+  workspace: string,
+  fakeCodex: string,
+  payload: unknown,
+  dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-")),
+  enabled = true
+) {
+  if (enabled) {
+    withDataRoot(dataRoot, () => setReviewGateEnabled(workspace, true));
+  }
   return spawnSync(process.execPath, [hookScript], {
     cwd: workspace,
     input: JSON.stringify({ fullyIdle: true, terminationReason: "model_stop", workspacePaths: [workspace] }),
@@ -53,6 +77,16 @@ function runHook(workspace: string, fakeCodex: string, payload: unknown, dataRoo
     }
   });
 }
+
+test("review gate allows without running Codex when disabled", () => {
+  const workspace = makeGitWorkspace();
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"));
+  const fakeCodex = makeFakeCodex({ verdict: "needs-attention", summary: "should not run", findings: [], next_steps: [] });
+  const result = runHook(workspace, fakeCodex, {}, dataRoot, false);
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { decision: "allow" });
+  withDataRoot(dataRoot, () => assert.deepEqual(readReviewGateEvents(10), []));
+});
 
 test("review gate allows when Codex approves changes", () => {
   const workspace = makeGitWorkspace();
@@ -96,18 +130,10 @@ test("review gate records monitor events", () => {
   const result = runHook(workspace, fakeCodex, payload, dataRoot);
   assert.equal(result.status, 0, result.stderr);
 
-  const previousDataRoot = process.env.AGY_CODEX_DATA;
-  process.env.AGY_CODEX_DATA = dataRoot;
-  try {
+  withDataRoot(dataRoot, () => {
     const events = readReviewGateEvents(10);
     assert.equal(events[0]?.type, "started");
     assert.ok(events.some((event) => event.type === "codex-result" && event.verdict === "approve"));
     assert.ok(events.some((event) => event.type === "decision" && event.decision === "allow"));
-  } finally {
-    if (previousDataRoot === undefined) {
-      delete process.env.AGY_CODEX_DATA;
-    } else {
-      process.env.AGY_CODEX_DATA = previousDataRoot;
-    }
-  }
+  });
 });

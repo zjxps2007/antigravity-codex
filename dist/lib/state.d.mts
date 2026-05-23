@@ -26,9 +26,13 @@ export interface Job {
     updatedAt?: string;
     completedAt?: string;
 }
+export interface CodexConfig {
+    reviewGateEnabled: boolean;
+}
 export interface CodexState {
     version: number;
     workspaceRoot: string;
+    config: CodexConfig;
     jobs: Job[];
 }
 export declare function nowIso(): string;
@@ -38,6 +42,9 @@ export declare function workspaceStateDir(cwd?: string): string;
 export declare function ensureStateDir(cwd?: string): void;
 export declare function readState(cwd?: string): CodexState;
 export declare function writeState(cwd: string, state: CodexState): CodexState;
+export declare function readConfig(cwd?: string): CodexConfig;
+export declare function isReviewGateEnabled(cwd?: string): boolean;
+export declare function setReviewGateEnabled(cwd: string, enabled: boolean): CodexState;
 export declare function generateJobId(prefix?: string): string;
 export declare function jobDir(cwd: string, jobId: string): string;
 export declare function writeJobArtifact(cwd: string, jobId: string, name: string, value: unknown): void;

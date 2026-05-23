@@ -19,15 +19,18 @@ import {
   findJob,
   findLatestResultJob,
   generateJobId,
+  isReviewGateEnabled,
   jobDir,
   listJobs,
   nowIso,
   readJobArtifact,
   resolveWorkspaceRoot,
+  setReviewGateEnabled,
   type CodexRequest,
   type Job,
   type JobStatus,
   upsertJob,
+  workspaceStateDir,
   writeJobArtifact
 } from "./lib/state.mjs";
 
@@ -242,69 +245,8 @@ function commandAvailable(command: string, args = ["--version"], cwd = process.c
   };
 }
 
-function shellQuote(value: string): string {
-  if (process.platform === "win32") {
-    return `"${value.replaceAll('"', '\\"')}"`;
-  }
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
 function reviewGateHookFile(): string {
-  return path.join(reviewGatePluginRoot(), "hooks", "hooks.json");
-}
-
-function reviewGatePluginRoot(): string {
-  return path.resolve(process.env.AGY_CODEX_PLUGIN_ROOT || process.env.ANTIGRAVITY_PLUGIN_ROOT || ROOT_DIR);
-}
-
-function reviewGateScriptFile(): string | null {
-  const root = reviewGatePluginRoot();
-  const candidates = [
-    path.join(root, "hooks", "bin", "stop-review-gate-hook.mjs"),
-    path.join(root, "dist", "stop-review-gate-hook.mjs")
-  ];
-  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
-}
-
-function reviewGateCommand(): string {
-  const script = reviewGateScriptFile();
-  return script ? `node ${shellQuote(script)}` : NPX_REVIEW_GATE_COMMAND;
-}
-
-function reviewGateConfig(enabled: boolean): Record<string, unknown> {
-  return {
-    "codex-stop-review-gate": {
-      enabled,
-      Stop: [
-        {
-          type: "command",
-          command: reviewGateCommand(),
-          timeout: 300
-        }
-      ]
-    }
-  };
-}
-
-function readReviewGateEnabled(): boolean {
-  const file = reviewGateHookFile();
-  if (!fs.existsSync(file)) {
-    return false;
-  }
-  try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
-      "codex-stop-review-gate"?: { enabled?: boolean };
-    };
-    return parsed["codex-stop-review-gate"]?.enabled !== false;
-  } catch {
-    return false;
-  }
-}
-
-function setReviewGateEnabled(enabled: boolean): void {
-  const file = reviewGateHookFile();
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, `${JSON.stringify(reviewGateConfig(enabled), null, 2)}\n`);
+  return path.join(ROOT_DIR, "hooks", "hooks.json");
 }
 
 function codexConfigArg(key: string, value: string): string[] {
@@ -598,24 +540,28 @@ async function runMaybeBackground(request: CodexRequest, options: CliOptions): P
 }
 
 async function handleSetup(argv: string[]): Promise<void> {
-  const { options } = parseArgs(argv, { booleanOptions: ["json", "enable-review-gate", "disable-review-gate"] });
+  const { options } = parseArgs(argv, {
+    valueOptions: ["cwd"],
+    booleanOptions: ["json", "enable-review-gate", "disable-review-gate"]
+  });
   if (optionBool(options, "enable-review-gate") && optionBool(options, "disable-review-gate")) {
     throw new Error("Use only one of --enable-review-gate or --disable-review-gate.");
   }
+  const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
   if (optionBool(options, "enable-review-gate")) {
-    setReviewGateEnabled(true);
+    setReviewGateEnabled(cwd, true);
   } else if (optionBool(options, "disable-review-gate")) {
-    setReviewGateEnabled(false);
+    setReviewGateEnabled(cwd, false);
   }
 
-  const cwd = process.cwd();
   const node = commandAvailable("node", ["--version"], cwd);
   const codex = codexAvailable(cwd);
   const ready = node.available && codex.available;
   const reviewGate = {
-    enabled: readReviewGateEnabled(),
+    enabled: isReviewGateEnabled(cwd),
+    configDir: workspaceStateDir(cwd),
     hooksFile: reviewGateHookFile(),
-    hookCommand: reviewGateCommand()
+    hookCommand: NPX_REVIEW_GATE_COMMAND
   };
   const payload = {
     ready,

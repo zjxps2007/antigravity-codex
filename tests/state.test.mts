@@ -3,7 +3,16 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listJobs, readJobArtifact, upsertJob, writeJobArtifact, readState, writeState } from "../dist/lib/state.mjs";
+import {
+  isReviewGateEnabled,
+  listJobs,
+  readJobArtifact,
+  readState,
+  setReviewGateEnabled,
+  upsertJob,
+  writeJobArtifact,
+  writeState
+} from "../dist/lib/state.mjs";
 
 test("state stores jobs and artifacts under AGY_CODEX_DATA", () => {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-test-"));
@@ -44,3 +53,14 @@ test("state cleans up orphaned job directories", () => {
   assert.equal(readJobArtifact(workspace, "job-2", "stdout.txt"), "ok2\n");
 });
 
+test("state stores review gate config per workspace", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-test-"));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-work-"));
+  process.env.AGY_CODEX_DATA = tempRoot;
+
+  assert.equal(isReviewGateEnabled(workspace), false);
+  setReviewGateEnabled(workspace, true);
+  assert.equal(isReviewGateEnabled(workspace), true);
+  setReviewGateEnabled(workspace, false);
+  assert.equal(isReviewGateEnabled(workspace), false);
+});

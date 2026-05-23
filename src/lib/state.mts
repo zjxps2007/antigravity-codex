@@ -38,9 +38,14 @@ export interface Job {
   completedAt?: string;
 }
 
+export interface CodexConfig {
+  reviewGateEnabled: boolean;
+}
+
 export interface CodexState {
   version: number;
   workspaceRoot: string;
+  config: CodexConfig;
   jobs: Job[];
 }
 
@@ -107,6 +112,9 @@ function defaultState(workspaceRoot: string): CodexState {
   return {
     version: STATE_VERSION,
     workspaceRoot,
+    config: {
+      reviewGateEnabled: false
+    },
     jobs: []
   };
 }
@@ -130,6 +138,10 @@ function readStateFromPaths(paths: WorkspacePaths): CodexState {
     return {
       ...defaultState(paths.workspaceRoot),
       ...parsed,
+      config: {
+        ...defaultState(paths.workspaceRoot).config,
+        ...(typeof parsed.config === "object" && parsed.config ? parsed.config : {})
+      },
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
     };
   } catch {
@@ -160,6 +172,10 @@ function writeStateToPaths(paths: WorkspacePaths, state: CodexState): CodexState
   const next: CodexState = {
     ...state,
     version: STATE_VERSION,
+    config: {
+      ...defaultState(paths.workspaceRoot).config,
+      ...(state.config ?? {})
+    },
     jobs: [...state.jobs].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, MAX_JOBS)
   };
   const tmpFile = `${paths.stateFile}.tmp`;
@@ -174,6 +190,25 @@ function writeStateToPaths(paths: WorkspacePaths, state: CodexState): CodexState
 
 export function writeState(cwd: string, state: CodexState): CodexState {
   return writeStateToPaths(ensureWorkspacePaths(cwd), state);
+}
+
+export function readConfig(cwd = process.cwd()): CodexConfig {
+  return readState(cwd).config;
+}
+
+export function isReviewGateEnabled(cwd = process.cwd()): boolean {
+  return readConfig(cwd).reviewGateEnabled;
+}
+
+export function setReviewGateEnabled(cwd: string, enabled: boolean): CodexState {
+  const state = readState(cwd);
+  return writeState(cwd, {
+    ...state,
+    config: {
+      ...state.config,
+      reviewGateEnabled: enabled
+    }
+  });
 }
 
 export function generateJobId(prefix = "job"): string {

@@ -52,6 +52,9 @@ function defaultState(workspaceRoot) {
     return {
         version: STATE_VERSION,
         workspaceRoot,
+        config: {
+            reviewGateEnabled: false
+        },
         jobs: []
     };
 }
@@ -72,6 +75,10 @@ function readStateFromPaths(paths) {
         return {
             ...defaultState(paths.workspaceRoot),
             ...parsed,
+            config: {
+                ...defaultState(paths.workspaceRoot).config,
+                ...(typeof parsed.config === "object" && parsed.config ? parsed.config : {})
+            },
             jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
         };
     }
@@ -102,6 +109,10 @@ function writeStateToPaths(paths, state) {
     const next = {
         ...state,
         version: STATE_VERSION,
+        config: {
+            ...defaultState(paths.workspaceRoot).config,
+            ...(state.config ?? {})
+        },
         jobs: [...state.jobs].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, MAX_JOBS)
     };
     const tmpFile = `${paths.stateFile}.tmp`;
@@ -113,6 +124,22 @@ function writeStateToPaths(paths, state) {
 }
 export function writeState(cwd, state) {
     return writeStateToPaths(ensureWorkspacePaths(cwd), state);
+}
+export function readConfig(cwd = process.cwd()) {
+    return readState(cwd).config;
+}
+export function isReviewGateEnabled(cwd = process.cwd()) {
+    return readConfig(cwd).reviewGateEnabled;
+}
+export function setReviewGateEnabled(cwd, enabled) {
+    const state = readState(cwd);
+    return writeState(cwd, {
+        ...state,
+        config: {
+            ...state.config,
+            reviewGateEnabled: enabled
+        }
+    });
 }
 export function generateJobId(prefix = "job") {
     return `${prefix}-${Date.now().toString(36)}-${randomBytes(3).toString("hex")}`;

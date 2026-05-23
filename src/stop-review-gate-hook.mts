@@ -11,6 +11,7 @@ import {
   nowIso,
   type ReviewGateEvent
 } from "./lib/review-gate-events.mjs";
+import { isReviewGateEnabled } from "./lib/state.mjs";
 
 interface StopHookInput {
   terminationReason?: string;
@@ -196,6 +197,11 @@ function runCodexReview(cwd: string): { payload: ReviewGatePayload | null; stdou
 async function main(): Promise<void> {
   const input = parseInput(await readStdin());
   const cwd = firstWorkspace(input);
+  if (!isReviewGateEnabled(cwd)) {
+    allow();
+    return;
+  }
+
   const id = createReviewGateRunId();
   const startedAt = Date.now();
   const baseEvent = { id, workspace: cwd };

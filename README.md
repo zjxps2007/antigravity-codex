@@ -70,6 +70,8 @@ The command files live under `commands/` and use `disable-model-invocation: true
 
 `/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
 
+The hook manifest is static and stays committed with its packaged command. `setup --enable-review-gate` only updates per-workspace config under the Antigravity Codex data directory, so it does not write local absolute paths into `hooks/hooks.json`.
+
 `/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
 
 ## Companion CLI
