@@ -48,7 +48,9 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 ```text
 /codex:setup
+/codex:review
 /codex:review --background
+/codex:review --base main
 /codex:adversarial-review --base main "인증 경계를 중점적으로 검토"
 /codex:rescue --write "실패하는 테스트 수정"
 /codex:status
@@ -58,11 +60,14 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 명령 파일은 `commands/` 아래에 있고 `disable-model-invocation: true`를 사용합니다. 따라서 자연어 자동 라우팅보다 명시적인 command 호출을 우선합니다.
 
+`/codex:review`는 읽기 전용이며 기본적으로 현재 uncommitted changes를 리뷰하고, `--base <ref>`를 주면 해당 기준 ref와의 diff를 리뷰합니다. 커스텀 focus text는 받지 않습니다. 특정 관점이나 더 비판적인 리뷰가 필요하면 `/codex:adversarial-review`를 사용합니다.
+
 ## Companion CLI
 
 ```bash
 node dist/agy-codex.mjs setup
 node dist/agy-codex.mjs review --wait
+node dist/agy-codex.mjs review --base main
 node dist/agy-codex.mjs adversarial-review --base main "인증 경계를 중점적으로 검토"
 node dist/agy-codex.mjs rescue --write "실패하는 테스트 수정"
 node dist/agy-codex.mjs task --write "실패하는 테스트 수정"
@@ -72,6 +77,8 @@ node dist/agy-codex.mjs cancel
 ```
 
 `review`, `adversarial-review`, `rescue`, `task`에 `--background`를 붙이면 작업을 큐에 넣고 즉시 job id를 반환합니다.
+
+`review`는 positional prompt text를 의도적으로 거부합니다. 커스텀 리뷰 지시가 필요하면 `adversarial-review`를 사용합니다.
 
 Antigravity 환경에서 스킬 브라우징이 필요한 경우를 위해 `skills/`도 유지하지만, 권장 워크플로우는 slash command입니다.
 

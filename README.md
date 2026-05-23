@@ -48,7 +48,9 @@ Install the plugin, then use the slash commands as the primary interface:
 
 ```text
 /codex:setup
+/codex:review
 /codex:review --background
+/codex:review --base main
 /codex:adversarial-review --base main "focus on auth boundaries"
 /codex:rescue --write "fix the failing test"
 /codex:status
@@ -58,11 +60,14 @@ Install the plugin, then use the slash commands as the primary interface:
 
 The command files live under `commands/` and use `disable-model-invocation: true`, so they are intended for explicit command invocation rather than natural-language auto-routing.
 
+`/codex:review` is read-only and reviews the current uncommitted changes by default, or a branch diff when `--base <ref>` is provided. It does not accept custom focus text; use `/codex:adversarial-review` when you want focused or skeptical review instructions.
+
 ## Companion CLI
 
 ```bash
 node dist/agy-codex.mjs setup
 node dist/agy-codex.mjs review --wait
+node dist/agy-codex.mjs review --base main
 node dist/agy-codex.mjs adversarial-review --base main "focus on auth boundaries"
 node dist/agy-codex.mjs rescue --write "fix the failing test"
 node dist/agy-codex.mjs task --write "fix the failing test"
@@ -72,5 +77,7 @@ node dist/agy-codex.mjs cancel
 ```
 
 Use `--background` on `review`, `adversarial-review`, `rescue`, or `task` to queue work and return immediately.
+
+`review` intentionally rejects positional prompt text. Use `adversarial-review` for custom review guidance.
 
 Skills are still included as a fallback integration surface for Antigravity environments that browse skills, but slash commands are the preferred workflow.
