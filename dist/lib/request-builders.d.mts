@@ -1,0 +1,14 @@
+import type { CodexRequest } from "./state.mjs";
+export declare const MODEL_ALIASES: Map<string, string>;
+export declare const VALID_EFFORTS: Set<string>;
+export declare const REVIEW_SCHEMA: string;
+export type CliOptions = Record<string, string | boolean | undefined>;
+export declare function optionString(options: CliOptions, key: string): string | undefined;
+export declare function optionBool(options: CliOptions, key: string): boolean;
+export declare function normalizeModel(model: string | undefined): string | null;
+export declare function normalizeEffort(effort: string | undefined): string | null;
+export declare function addRuntimeOptions(args: string[], options: CliOptions): string[];
+export declare function buildReviewRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest;
+export declare function buildAdversarialPrompt(options: CliOptions, focusText: string): string;
+export declare function buildAdversarialRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest;
+export declare function buildTaskRequest(cwd: string, options: CliOptions, positionals: string[]): CodexRequest;

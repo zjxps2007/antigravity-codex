@@ -192,3 +192,9 @@ export function findLatestResultJob(cwd, reference = "") {
     }
     return listJobs(cwd).find((job) => ["completed", "failed", "cancelled"].includes(job.status ?? "")) ?? null;
 }
+export function clearJobs(cwd = process.cwd()) {
+    const paths = ensureWorkspacePaths(cwd);
+    const state = readStateFromPaths(paths);
+    state.jobs = [];
+    writeStateToPaths(paths, state);
+}

@@ -269,3 +269,10 @@ export function findLatestResultJob(cwd: string, reference = ""): Job | null {
   }
   return listJobs(cwd).find((job) => ["completed", "failed", "cancelled"].includes(job.status ?? "")) ?? null;
 }
+
+export function clearJobs(cwd = process.cwd()): void {
+  const paths = ensureWorkspacePaths(cwd);
+  const state = readStateFromPaths(paths);
+  state.jobs = [];
+  writeStateToPaths(paths, state);
+}

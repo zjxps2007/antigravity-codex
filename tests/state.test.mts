@@ -11,7 +11,8 @@ import {
   setReviewGateEnabled,
   upsertJob,
   writeJobArtifact,
-  writeState
+  writeState,
+  clearJobs
 } from "../dist/lib/state.mjs";
 
 test("state stores jobs and artifacts under AGY_CODEX_DATA", () => {
@@ -63,4 +64,24 @@ test("state stores review gate config per workspace", () => {
   assert.equal(isReviewGateEnabled(workspace), true);
   setReviewGateEnabled(workspace, false);
   assert.equal(isReviewGateEnabled(workspace), false);
+});
+
+test("clearJobs empties the list of jobs and deletes directories", () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-test-"));
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-work-"));
+  process.env.AGY_CODEX_DATA = tempRoot;
+
+  upsertJob(workspace, { id: "job-1", kind: "review", status: "queued" });
+  writeJobArtifact(workspace, "job-1", "stdout.txt", "ok");
+
+  upsertJob(workspace, { id: "job-2", kind: "review", status: "queued" });
+  writeJobArtifact(workspace, "job-2", "stdout.txt", "ok2");
+
+  assert.equal(listJobs(workspace).length, 2);
+
+  clearJobs(workspace);
+
+  assert.equal(listJobs(workspace).length, 0);
+  assert.equal(readJobArtifact(workspace, "job-1", "stdout.txt"), null);
+  assert.equal(readJobArtifact(workspace, "job-2", "stdout.txt"), null);
 });

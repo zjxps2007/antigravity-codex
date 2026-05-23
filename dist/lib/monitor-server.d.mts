@@ -1,0 +1,16 @@
+import http from "node:http";
+import { type MonitorState } from "./review-gate-events.mjs";
+export declare function normalizeMonitorHost(value: string | undefined): string;
+export declare function parseMonitorPort(value: string | undefined): number;
+export declare function monitorUrl(host: string, port: number): string;
+export declare function processIsRunning(pid: number | null | undefined): boolean;
+export declare function monitorHealth(state: MonitorState, timeoutMs?: number): Promise<boolean>;
+export declare function readActiveMonitor(): Promise<MonitorState | null>;
+export declare function waitForMonitor(state: MonitorState, timeoutMs?: number): Promise<boolean>;
+export declare function printMonitorState(state: MonitorState | null, asJson: boolean): void;
+export declare function sendJson(response: http.ServerResponse, status: number, payload: unknown): void;
+export declare function sendHtml(response: http.ServerResponse, html: string): void;
+export declare function handleMonitorRequest(request: http.IncomingMessage, response: http.ServerResponse, state: MonitorState, shutdown: () => void): void;
+export declare function startMonitorServer(host: string, port: number): Promise<void>;
+export declare function stopMonitorProcess(pid: number): void;
+export declare function handleMonitor(argv: string[], scriptPath: string, options: Record<string, any>): Promise<void>;

@@ -55,3 +55,4 @@ export declare function upsertJob(cwd: string, patch: Partial<Job> & {
 export declare function listJobs(cwd?: string): Job[];
 export declare function findJob(cwd: string, reference?: string): Job | null;
 export declare function findLatestResultJob(cwd: string, reference?: string): Job | null;
+export declare function clearJobs(cwd?: string): void;
