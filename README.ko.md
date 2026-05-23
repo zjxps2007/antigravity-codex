@@ -48,6 +48,7 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 ```text
 /codex:setup
+/codex:setup --enable-review-gate
 /codex:review
 /codex:review --background
 /codex:review --base main
@@ -62,10 +63,13 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 `/codex:review`는 읽기 전용이며 기본적으로 현재 uncommitted changes를 리뷰하고, `--base <ref>`를 주면 해당 기준 ref와의 diff를 리뷰합니다. 커스텀 focus text는 받지 않습니다. 특정 관점이나 더 비판적인 리뷰가 필요하면 `/codex:adversarial-review`를 사용합니다.
 
+`/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
+
 ## Companion CLI
 
 ```bash
 node dist/agy-codex.mjs setup
+node dist/agy-codex.mjs setup --enable-review-gate
 node dist/agy-codex.mjs review --wait
 node dist/agy-codex.mjs review --base main
 node dist/agy-codex.mjs adversarial-review --base main "인증 경계를 중점적으로 검토"

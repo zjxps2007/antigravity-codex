@@ -48,6 +48,7 @@ Install the plugin, then use the slash commands as the primary interface:
 
 ```text
 /codex:setup
+/codex:setup --enable-review-gate
 /codex:review
 /codex:review --background
 /codex:review --base main
@@ -62,10 +63,13 @@ The command files live under `commands/` and use `disable-model-invocation: true
 
 `/codex:review` is read-only and reviews the current uncommitted changes by default, or a branch diff when `--base <ref>` is provided. It does not accept custom focus text; use `/codex:adversarial-review` when you want focused or skeptical review instructions.
 
+`/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
+
 ## Companion CLI
 
 ```bash
 node dist/agy-codex.mjs setup
+node dist/agy-codex.mjs setup --enable-review-gate
 node dist/agy-codex.mjs review --wait
 node dist/agy-codex.mjs review --base main
 node dist/agy-codex.mjs adversarial-review --base main "focus on auth boundaries"

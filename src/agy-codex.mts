@@ -61,10 +61,28 @@ interface JobIdentity {
 }
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
-const ROOT_DIR = path.resolve(path.dirname(SCRIPT_PATH), "..");
-const REVIEW_SCHEMA = path.join(ROOT_DIR, "schemas", "review-output.schema.json");
+const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
+const ROOT_DIR = resolveRuntimeRoot(SCRIPT_DIR);
+const REVIEW_SCHEMA_CANDIDATES = [
+  path.join(ROOT_DIR, "schemas", "review-output.schema.json"),
+  path.join(SCRIPT_DIR, "..", "schemas", "review-output.schema.json")
+];
+const REVIEW_SCHEMA = REVIEW_SCHEMA_CANDIDATES.find((candidate) => fs.existsSync(candidate)) ?? REVIEW_SCHEMA_CANDIDATES[0]!;
 const MODEL_ALIASES = new Map<string, string>([["spark", "gpt-5.3-codex-spark"]]);
 const VALID_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+
+function resolveRuntimeRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+  for (let i = 0; i < 5; i += 1) {
+    if (fs.existsSync(path.join(current, "plugin.json"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return path.resolve(startDir, "..");
+}
 
 function optionString(options: CliOptions, key: string): string | undefined {
   const value = options[key];
@@ -160,8 +178,8 @@ function codexAvailable(cwd = process.cwd()): CommandAvailability {
 
 function usage(): void {
   console.log(`Usage:
-  node dist/agy-codex.mjs setup [--json]
-  node dist/agy-codex.mjs review [--wait|--background] [--base <ref>|--commit <sha>] [--model <model>] [prompt]
+  node dist/agy-codex.mjs setup [--json] [--enable-review-gate|--disable-review-gate]
+  node dist/agy-codex.mjs review [--wait|--background] [--base <ref>|--commit <sha>] [--model <model>]
   node dist/agy-codex.mjs adversarial-review [--wait|--background] [--base <ref>] [--model <model>] [focus text]
   node dist/agy-codex.mjs rescue [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
   node dist/agy-codex.mjs task [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
@@ -195,6 +213,61 @@ function commandAvailable(command: string, args = ["--version"], cwd = process.c
     stderr: result.stderr?.trim() ?? "",
     error: result.error?.message ?? null
   };
+}
+
+function shellQuote(value: string): string {
+  if (process.platform === "win32") {
+    return `"${value.replaceAll('"', '\\"')}"`;
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function reviewGateHookFile(): string {
+  return path.join(ROOT_DIR, "hooks", "hooks.json");
+}
+
+function reviewGateScriptFile(): string {
+  const candidates = [
+    path.join(ROOT_DIR, "hooks", "bin", "stop-review-gate-hook.mjs"),
+    path.join(ROOT_DIR, "dist", "stop-review-gate-hook.mjs")
+  ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? candidates[0]!;
+}
+
+function reviewGateConfig(enabled: boolean): Record<string, unknown> {
+  return {
+    "codex-stop-review-gate": {
+      enabled,
+      Stop: [
+        {
+          type: "command",
+          command: `node ${shellQuote(reviewGateScriptFile())}`,
+          timeout: 300
+        }
+      ]
+    }
+  };
+}
+
+function readReviewGateEnabled(): boolean {
+  const file = reviewGateHookFile();
+  if (!fs.existsSync(file)) {
+    return false;
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as {
+      "codex-stop-review-gate"?: { enabled?: boolean };
+    };
+    return parsed["codex-stop-review-gate"]?.enabled !== false;
+  } catch {
+    return false;
+  }
+}
+
+function setReviewGateEnabled(enabled: boolean): void {
+  const file = reviewGateHookFile();
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${JSON.stringify(reviewGateConfig(enabled), null, 2)}\n`);
 }
 
 function codexConfigArg(key: string, value: string): string[] {
@@ -488,15 +561,30 @@ async function runMaybeBackground(request: CodexRequest, options: CliOptions): P
 }
 
 async function handleSetup(argv: string[]): Promise<void> {
-  const { options } = parseArgs(argv, { booleanOptions: ["json"] });
+  const { options } = parseArgs(argv, { booleanOptions: ["json", "enable-review-gate", "disable-review-gate"] });
+  if (optionBool(options, "enable-review-gate") && optionBool(options, "disable-review-gate")) {
+    throw new Error("Use only one of --enable-review-gate or --disable-review-gate.");
+  }
+  if (optionBool(options, "enable-review-gate")) {
+    setReviewGateEnabled(true);
+  } else if (optionBool(options, "disable-review-gate")) {
+    setReviewGateEnabled(false);
+  }
+
   const cwd = process.cwd();
   const node = commandAvailable("node", ["--version"], cwd);
   const codex = codexAvailable(cwd);
   const ready = node.available && codex.available;
+  const reviewGate = {
+    enabled: readReviewGateEnabled(),
+    hooksFile: reviewGateHookFile(),
+    hookScript: reviewGateScriptFile()
+  };
   const payload = {
     ready,
     node,
     codex,
+    reviewGate,
     workspaceRoot: resolveWorkspaceRoot(cwd),
     nextSteps: ready ? [] : ["Install Codex with `npm install -g @openai/codex` and run `codex login`."]
   };
@@ -510,6 +598,7 @@ async function handleSetup(argv: string[]): Promise<void> {
   console.log(`Node: ${node.available ? node.stdout : "missing"}`);
   console.log(`Codex: ${codex.available ? codex.stdout : "missing"}`);
   console.log(`Workspace: ${payload.workspaceRoot}`);
+  console.log(`Review gate: ${reviewGate.enabled ? "enabled" : "disabled"}`);
   console.log(`Ready: ${ready ? "yes" : "no"}`);
   for (const step of payload.nextSteps) console.log(`- ${step}`);
 }
