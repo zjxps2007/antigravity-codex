@@ -36,6 +36,19 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 The repository includes both root `plugin.json` for local Antigravity validation and `.claude-plugin/plugin.json` for GitHub URL installation.
 
+When updating an existing install, prefer a clean reinstall so Antigravity records all plugin components, including hooks:
+
+```bash
+agy plugin uninstall codex
+agy plugin install https://github.com/zjxps2007/antigravity-codex.git
+```
+
+Verify that the import manifest contains `hooks`:
+
+```bash
+cat ~/.gemini/antigravity-cli/import_manifest.json
+```
+
 Then run:
 
 ```text
@@ -73,6 +86,30 @@ The command files live under `commands/` and use `disable-model-invocation: true
 The hook manifest is static and stays committed with its packaged command. `setup --enable-review-gate` only updates per-workspace config under the Antigravity Codex data directory, so it does not write local absolute paths into `hooks/hooks.json`.
 
 `/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
+
+## Automatic Review Troubleshooting
+
+Do not use web search to diagnose this plugin. The authoritative state is local:
+
+```bash
+agy plugin list
+cat ~/.gemini/antigravity-cli/import_manifest.json
+cat ~/.gemini/antigravity-cli/plugins/codex/hooks.json
+node dist/agy-codex.mjs setup --json
+node dist/agy-codex.mjs monitor --status --json
+```
+
+For automatic review to run, all of the following must be true:
+
+- `import_manifest.json` lists `hooks` for the `codex` plugin.
+- `/codex:setup --enable-review-gate` has enabled the current workspace.
+- The workspace is a git repository and has uncommitted changes.
+- Antigravity reaches a Stop hook point after editing.
+- The Codex CLI is authenticated and has quota available.
+
+If `hooks` is missing from `import_manifest.json`, reinstall with `agy plugin uninstall codex` followed by `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`.
+
+If the monitor shows no `Review Gate Runs`, manually check the event file path reported by `/codex:monitor --status --json`. A missing `events.jsonl` means the Stop hook has not recorded any event yet. `Codex Jobs` are separate from `Review Gate Runs`: explicit commands such as `/codex:review` appear as jobs, while automatic Stop-hook reviews appear as review gate runs.
 
 ## Companion CLI
 

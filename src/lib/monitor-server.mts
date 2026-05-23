@@ -11,6 +11,7 @@ import {
   type MonitorState
 } from "./review-gate-events.mjs";
 import { renderMonitorHtml } from "./monitor-template.mjs";
+import { CliOptions } from "./request-builders.mjs";
 import { listJobs, clearJobs, type Job } from "./state.mjs";
 
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
@@ -267,7 +268,7 @@ export function stopMonitorProcess(pid: number): void {
 export async function handleMonitor(
   argv: string[],
   scriptPath: string,
-  options: Record<string, any>
+  options: CliOptions
 ): Promise<void> {
   const asJson = options.json === true;
 

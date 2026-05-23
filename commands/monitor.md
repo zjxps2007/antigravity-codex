@@ -9,6 +9,15 @@ Manage the local Codex review gate monitor.
 
 Raw slash-command arguments: `$ARGUMENTS`
 
+Use only local monitor state for troubleshooting. Do not use WebSearch for Antigravity hook behavior. The monitor reads local review-gate events and local Codex job state.
+
+Interpret the UI as follows:
+
+- `Review Gate Runs` are automatic Stop-hook reviews.
+- `Codex Jobs` are explicit commands such as `/codex:review`, `/codex:task`, or `/codex:rescue`.
+- If `Review Gate Runs` is empty and `events.jsonl` is missing, the Stop hook has not recorded an event yet.
+- If `Codex Jobs` is populated but `Review Gate Runs` is empty, explicit commands ran but automatic Stop-hook review did not.
+
 Run:
 
 ```bash

@@ -913,6 +913,18 @@ export function renderMonitorHtml(): string {
     let autoRefreshEnabled = false;
     let loading = false;
 
+    const clipboardHelper = function(text) {
+      if (!text) return;
+      navigator.clipboard.writeText(text).catch((err) => {
+        console.error('Failed to copy to clipboard:', err);
+      });
+    };
+    if (typeof window !== 'undefined') {
+      window.copyToClipboard = clipboardHelper;
+    } else {
+      globalThis.copyToClipboard = clipboardHelper;
+    }
+
     const ICONS = {
       allow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
       approve: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
@@ -968,17 +980,19 @@ export function renderMonitorHtml(): string {
     }
 
     function renderTimeline(items) {
-      const rows = items.map((event) => {
-        return '<div class="event-row">' +
-          '<div class="event-time">' + h(eventTime(event.time)) + '</div>' +
-          '<div class="event-type">' + h(event.type || 'event') + '</div>' +
-          '<div class="event-message">' + h(eventMessage(event)) + '</div>' +
-          '</div>';
-      }).join('');
-      return '<div class="event-timeline">' +
-        '<div class="section-title">Event Timeline</div>' +
-        '<div class="event-list">' + rows + '</div>' +
-        '</div>';
+      const rows = items.map((event) => \`
+        <div class="event-row">
+          <div class="event-time">\${h(eventTime(event.time))}</div>
+          <div class="event-type">\${h(event.type || 'event')}</div>
+          <div class="event-message">\${h(eventMessage(event))}</div>
+        </div>
+      \`).join('');
+      return \`
+        <div class="event-timeline">
+          <div class="section-title">Event Timeline</div>
+          <div class="event-list">\${rows}</div>
+        </div>
+      \`;
     }
 
     function renderLogs(items) {
@@ -994,16 +1008,21 @@ export function renderMonitorHtml(): string {
         }
       }
       if (!blocks.length) return '';
-      const html = blocks.map((block) => {
-        return '<div class="log-block">' +
-          '<div class="log-label"><span>' + h(block.eventType) + '</span><span>' + h(block.type) + '</span></div>' +
-          '<pre class="log-text">' + h(block.text) + '</pre>' +
-          '</div>';
-      }).join('');
-      return '<div class="logs-container">' +
-        '<div class="section-title">Execution Logs</div>' +
-        '<div class="log-list">' + html + '</div>' +
-        '</div>';
+      const html = blocks.map((block) => \`
+        <div class="log-block">
+          <div class="log-label">
+            <span>\${h(block.eventType)}</span>
+            <span>\${h(block.type)}</span>
+          </div>
+          <pre class="log-text">\${h(block.text)}</pre>
+        </div>
+      \`).join('');
+      return \`
+        <div class="logs-container">
+          <div class="section-title">Execution Logs</div>
+          <div class="log-list">\${html}</div>
+        </div>
+      \`;
     }
 
     function renderJob(job) {
@@ -1011,34 +1030,52 @@ export function renderMonitorHtml(): string {
       const phase = job.phase || status;
       const updated = job.updatedAt || job.createdAt || job.completedAt;
       const log = job.logTail || '';
-      return '<article class="run ' + h(status) + '">' +
-        '<div class="run-head">' +
-        '<div>' +
-        '<div class="run-title">' + h(job.title || job.id) + '</div>' +
-        '<div class="badge-group">' +
-        '<span class="badge ' + h(status) + '">' + h(status) + '</span>' +
-        (job.kind ? '<span class="badge">' + h(job.kind) + '</span>' : '') +
-        (job.pid ? '<span class="badge">pid ' + h(job.pid) + '</span>' : '') +
-        '</div>' +
-        '</div>' +
-        '<div class="run-time">' + h(updated ? new Date(updated).toLocaleString() : '') + '</div>' +
-        '</div>' +
-        '<div class="summary">' + h(job.summary || phase) + '</div>' +
-        (log ? '<div class="logs-container">' +
-          '<div class="section-title">Job Log</div>' +
-          '<div class="log-list"><div class="log-block">' +
-          '<div class="log-label"><span>' + h(job.id) + '</span><span>' + h(job.logFile || 'log') + '</span></div>' +
-          '<pre class="log-text">' + h(log) + '</pre>' +
-          '</div></div>' +
-          '</div>' : '') +
-        '<details>' +
-        '<summary>' +
-        '<svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>' +
-        'Raw job payload' +
-        '</summary>' +
-        '<pre>' + h(JSON.stringify(job, null, 2)) + '</pre>' +
-        '</details>' +
-        '</article>';
+
+      const kindBadge = job.kind ? \`<span class="badge">\${h(job.kind)}</span>\` : '';
+      const pidBadge = job.pid ? \`<span class="badge">pid \${h(job.pid)}</span>\` : '';
+
+      let logHtml = '';
+      if (log) {
+        logHtml = \`
+          <div class="logs-container">
+            <div class="section-title">Job Log</div>
+            <div class="log-list">
+              <div class="log-block">
+                <div class="log-label">
+                  <span>\${h(job.id)}</span>
+                  <span>\${h(job.logFile || 'log')}</span>
+                </div>
+                <pre class="log-text">\${h(log)}</pre>
+              </div>
+            </div>
+          </div>
+        \`;
+      }
+
+      return \`
+        <article class="run \${h(status)}">
+          <div class="run-head">
+            <div>
+              <div class="run-title">\${h(job.title || job.id)}</div>
+              <div class="badge-group">
+                <span class="badge \${h(status)}">\${h(status)}</span>
+                \${kindBadge}
+                \${pidBadge}
+              </div>
+            </div>
+            <div class="run-time">\${h(updated ? new Date(updated).toLocaleString() : '')}</div>
+          </div>
+          <div class="summary">\${h(job.summary || phase)}</div>
+          \${logHtml}
+          <details>
+            <summary>
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>
+              Raw job payload
+            </summary>
+            <pre>\${h(JSON.stringify(job, null, 2))}</pre>
+          </details>
+        </article>
+      \`;
     }
 
     function renderFindings(findings) {
@@ -1049,20 +1086,39 @@ export function renderMonitorHtml(): string {
         const severityClass = finding.severity ? 'severity-' + finding.severity.toLowerCase() : '';
         const severityLabel = finding.severity ? finding.severity.toUpperCase() : 'FINDING';
         
-        return '<div class="finding ' + h(severityClass) + '">' +
-          '<div class="finding-header">' +
-          '<b>[' + h(severityLabel) + '] ' + h(finding.title || 'Finding') + '</b>' +
-          (location ? '<span class="location" title="Click to copy path" onclick="navigator.clipboard.writeText(\\\'' + location.replaceAll('\\\\', '\\\\\\\\').replaceAll('\\\'', '\\\\\\\'') + '\\\')">' + h(location) + '</span>' : '') + 
-          '</div>' +
-          (finding.description ? '<div class="finding-desc">' + h(finding.description) + '</div>' : '') +
-          (finding.recommendation ? '<div class="finding-rec"><b>💡 Recommendation:</b> ' + h(finding.recommendation) + '</div>' : '') +
-          '</div>';
+        let locationHtml = '';
+        if (location) {
+          locationHtml = \`<span class="location" title="Click to copy path" onclick="window.copyToClipboard(this.textContent)">\${h(location)}</span>\`;
+        }
+        
+        let descHtml = '';
+        if (finding.description) {
+          descHtml = \`<div class="finding-desc">\${h(finding.description)}</div>\`;
+        }
+        
+        let recHtml = '';
+        if (finding.recommendation) {
+          recHtml = \`<div class="finding-rec"><b>💡 Recommendation:</b> \${h(finding.recommendation)}</div>\`;
+        }
+        
+        return \`
+          <div class="finding \${h(severityClass)}">
+            <div class="finding-header">
+              <b>[\${h(severityLabel)}] \${h(finding.title || 'Finding')}</b>
+              \${locationHtml}
+            </div>
+            \${descHtml}
+            \${recHtml}
+          </div>
+        \`;
       }).join('');
 
-      return '<div class="findings-container">' +
-        '<div class="findings-title">' + ICONS.finding + ' Actionable Findings (' + findings.length + ')</div>' +
-        '<div class="findings">' + itemsHtml + '</div>' +
-        '</div>';
+      return \`
+        <div class="findings-container">
+          <div class="findings-title">\${ICONS.finding} Actionable Findings (\${findings.length})</div>
+          <div class="findings">\${itemsHtml}</div>
+        </div>
+      \`;
     }
 
     function renderRun(run) {
@@ -1078,29 +1134,36 @@ export function renderMonitorHtml(): string {
       const statusIcon = ICONS[status] || '';
       const verdictIcon = ICONS[verdict] || '';
 
-      return '<article class="run ' + h(status) + '">' +
-        '<div class="run-head">' +
-        '<div>' +
-        '<div class="run-title">' + h(started && started.workspace || 'Workspace review') + '</div>' +
-        '<div class="badge-group">' +
-        '<span class="badge ' + h(status) + '">' + statusIcon + h(status) + '</span>' +
-        '<span class="badge ' + h(verdict) + '">' + verdictIcon + h(verdict) + '</span>' +
-        '</div>' +
-        '</div>' +
-        '<div class="run-time">' + h(new Date(run.last.time || Date.now()).toLocaleString()) + '</div>' +
-        '</div>' +
-        (summary ? '<div class="summary">' + h(summary) + '</div>' : '') +
-        renderTimeline(run.items) +
-        renderFindings(findings) +
-        renderLogs(run.items) +
-        '<details>' +
-        '<summary>' +
-        '<svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>' +
-        'Raw events payload' +
-        '</summary>' +
-        '<pre>' + h(JSON.stringify(raw, null, 2)) + '</pre>' +
-        '</details>' +
-        '</article>';
+      let summaryHtml = '';
+      if (summary) {
+        summaryHtml = \`<div class="summary">\${h(summary)}</div>\`;
+      }
+
+      return \`
+        <article class="run \${h(status)}">
+          <div class="run-head">
+            <div>
+              <div class="run-title">\${h(started && started.workspace || 'Workspace review')}</div>
+              <div class="badge-group">
+                <span class="badge \${h(status)}">\${statusIcon}\${h(status)}</span>
+                <span class="badge \${h(verdict)}">\${verdictIcon}\${h(verdict)}</span>
+              </div>
+            </div>
+            <div class="run-time">\${h(new Date(run.last.time || Date.now()).toLocaleString())}</div>
+          </div>
+          \${summaryHtml}
+          \${renderTimeline(run.items)}
+          \${renderFindings(findings)}
+          \${renderLogs(run.items)}
+          <details>
+            <summary>
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>
+              Raw events payload
+            </summary>
+            <pre>\${h(JSON.stringify(raw, null, 2))}</pre>
+          </details>
+        </article>
+      \`;
     }
 
     async function load() {

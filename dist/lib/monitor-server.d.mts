@@ -1,5 +1,6 @@
 import http from "node:http";
 import { type MonitorState } from "./review-gate-events.mjs";
+import { CliOptions } from "./request-builders.mjs";
 export declare function normalizeMonitorHost(value: string | undefined): string;
 export declare function parseMonitorPort(value: string | undefined): number;
 export declare function monitorUrl(host: string, port: number): string;
@@ -13,4 +14,4 @@ export declare function sendHtml(response: http.ServerResponse, html: string): v
 export declare function handleMonitorRequest(request: http.IncomingMessage, response: http.ServerResponse, state: MonitorState, shutdown: () => void): void;
 export declare function startMonitorServer(host: string, port: number): Promise<void>;
 export declare function stopMonitorProcess(pid: number): void;
-export declare function handleMonitor(argv: string[], scriptPath: string, options: Record<string, any>): Promise<void>;
+export declare function handleMonitor(argv: string[], scriptPath: string, options: CliOptions): Promise<void>;

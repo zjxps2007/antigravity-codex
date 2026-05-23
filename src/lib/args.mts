@@ -24,41 +24,28 @@ export function splitRawArgumentString(raw: unknown): string[] {
       current += char;
       escaping = false;
       inWord = true;
-      continue;
-    }
-
-    if (char === "\\") {
+    } else if (char === "\\") {
       escaping = true;
       inWord = true;
-      continue;
-    }
-
-    if (quote) {
+    } else if (quote) {
       if (char === quote) {
         quote = null;
       } else {
         current += char;
       }
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
+    } else if (char === '"' || char === "'") {
       quote = char;
       inWord = true;
-      continue;
-    }
-
-    if (/\s/.test(char)) {
+    } else if (/\s/.test(char)) {
       if (inWord) {
         parts.push(current);
         current = "";
         inWord = false;
       }
-      continue;
+    } else {
+      current += char;
+      inWord = true;
     }
-
-    current += char;
-    inWord = true;
   }
 
   if (escaping) {

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveCodexInvocation } from "./exec-resolver.mjs";
+import { resolveCodexInvocation, resolveRuntimeRoot } from "./exec-resolver.mjs";
 import type { CodexRequest } from "./state.mjs";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -9,19 +9,6 @@ const SCRIPT_DIR = path.dirname(SCRIPT_PATH);
 
 export const MODEL_ALIASES = new Map<string, string>([["spark", "gpt-5.3-codex-spark"]]);
 export const VALID_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
-
-function resolveRuntimeRoot(startDir: string): string {
-  let current = path.resolve(startDir);
-  for (let i = 0; i < 5; i += 1) {
-    if (fs.existsSync(path.join(current, "plugin.json"))) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return path.resolve(startDir, "..");
-}
 
 const ROOT_DIR = resolveRuntimeRoot(SCRIPT_DIR);
 const REVIEW_SCHEMA_CANDIDATES = [

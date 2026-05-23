@@ -36,6 +36,19 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 
 이 저장소는 로컬 Antigravity 검증용 루트 `plugin.json`과 GitHub URL 설치용 `.claude-plugin/plugin.json`을 함께 포함합니다.
 
+기존 설치를 업데이트할 때는 hook 컴포넌트까지 manifest에 다시 등록되도록 재설치를 권장합니다.
+
+```bash
+agy plugin uninstall codex
+agy plugin install https://github.com/zjxps2007/antigravity-codex.git
+```
+
+`import_manifest.json`에 `hooks`가 들어갔는지 확인합니다.
+
+```bash
+cat ~/.gemini/antigravity-cli/import_manifest.json
+```
+
 설치 후 먼저 확인합니다.
 
 ```text
@@ -73,6 +86,30 @@ agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 Hook manifest는 정적 파일로 유지되고 패키지용 command만 커밋됩니다. `setup --enable-review-gate`는 로컬 Antigravity Codex 데이터 디렉터리의 workspace별 config만 수정하므로 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다.
 
 `/codex:monitor`는 review gate 실행 이력을 볼 수 있는 로컬 웹 UI를 `http://127.0.0.1:8765`에 띄웁니다. Stop hook은 시작/스킵/Codex 결과/최종 decision 이벤트를 로컬 Antigravity Codex 데이터 디렉터리에 저장하고, monitor는 Codex verdict, finding, raw event를 보여줍니다. 종료하려면 `/codex:monitor --stop`을 사용합니다. 기존 이벤트를 지우려면 `/codex:monitor --clear`를 사용합니다. 서버를 현재 터미널 프로세스에 붙여 실행하려면 `--foreground`를 사용합니다.
+
+## 자동 리뷰 문제 확인
+
+이 플러그인 문제를 진단할 때는 WebSearch를 사용하지 않습니다. 기준 상태는 로컬 파일과 companion 출력입니다.
+
+```bash
+agy plugin list
+cat ~/.gemini/antigravity-cli/import_manifest.json
+cat ~/.gemini/antigravity-cli/plugins/codex/hooks.json
+node dist/agy-codex.mjs setup --json
+node dist/agy-codex.mjs monitor --status --json
+```
+
+자동 리뷰가 실행되려면 아래 조건이 모두 맞아야 합니다.
+
+- `import_manifest.json`의 `codex` 플러그인 components에 `hooks`가 포함되어야 합니다.
+- `/codex:setup --enable-review-gate`가 현재 workspace에 대해 켜져 있어야 합니다.
+- workspace가 git 저장소이고 uncommitted change가 있어야 합니다.
+- Antigravity가 파일 수정 후 Stop hook 지점에 도달해야 합니다.
+- Codex CLI 인증과 quota가 정상이어야 합니다.
+
+`import_manifest.json`에 `hooks`가 없으면 `agy plugin uninstall codex` 후 `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`로 재설치합니다.
+
+monitor에 `Review Gate Runs`가 없으면 `/codex:monitor --status --json`이 출력하는 이벤트 파일 경로를 확인합니다. `events.jsonl`이 없으면 Stop hook이 아직 이벤트를 기록하지 않은 상태입니다. `Codex Jobs`와 `Review Gate Runs`는 별도입니다. `/codex:review` 같은 명시적 명령은 job으로 보이고, 자동 Stop-hook 리뷰는 review gate run으로 보입니다.
 
 ## Companion CLI
 

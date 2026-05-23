@@ -9,6 +9,16 @@ Run the Antigravity Codex companion setup check.
 
 Raw slash-command arguments: `$ARGUMENTS`
 
+Use only local checks for setup or review-gate troubleshooting. Do not use WebSearch for `antigravity-cli`, `hooks.json`, `/codex:setup`, or `codex-plugin-cc`; the local companion output and local Antigravity files are authoritative.
+
+For automatic review troubleshooting, check these local facts:
+
+1. `agy plugin list`
+2. `$HOME/.gemini/antigravity-cli/import_manifest.json` includes `"hooks"` in the `codex` plugin components
+3. `$HOME/.gemini/antigravity-cli/plugins/codex/hooks.json` contains `codex-stop-review-gate`
+4. `setup --json` reports `reviewGate.enabled: true`
+5. The current workspace is a git repository with uncommitted changes
+
 Resolve the companion script in this order:
 
 1. `$AGY_CODEX_PLUGIN_ROOT/hooks/bin/agy-codex.mjs`
