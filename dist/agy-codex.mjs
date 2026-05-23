@@ -146,6 +146,7 @@ function buildReviewRequest(cwd, options, positionals) {
     const codex = resolveCodexInvocation(cwd);
     const args = ["exec", "review"];
     addRuntimeOptions(args, options);
+    const prompt = positionals.join(" ").trim();
     const base = optionString(options, "base");
     const commit = optionString(options, "commit");
     if (base) {
@@ -154,10 +155,9 @@ function buildReviewRequest(cwd, options, positionals) {
     else if (commit) {
         args.push("--commit", commit);
     }
-    else {
+    else if (!prompt) {
         args.push("--uncommitted");
     }
-    const prompt = positionals.join(" ").trim();
     if (prompt)
         args.push(prompt);
     const target = base ? `base ${base}` : commit ? `commit ${commit}` : "uncommitted changes";
@@ -187,7 +187,7 @@ function buildAdversarialPrompt(options, focusText) {
 function buildAdversarialRequest(cwd, options, positionals) {
     const codex = resolveCodexInvocation(cwd);
     const prompt = buildAdversarialPrompt(options, positionals.join(" ").trim());
-    const args = ["exec", "--sandbox", "read-only", "--ask-for-approval", "never"];
+    const args = ["--ask-for-approval", "never", "exec", "--sandbox", "read-only"];
     addRuntimeOptions(args, options);
     if (fs.existsSync(REVIEW_SCHEMA)) {
         args.push("--output-schema", REVIEW_SCHEMA);
@@ -209,9 +209,12 @@ function buildTaskRequest(cwd, options, positionals) {
     if (!prompt && !optionBool(options, "resume")) {
         throw new Error("Provide a task prompt, or pass --resume to continue the latest Codex session.");
     }
-    const args = optionBool(options, "resume") ? ["exec", "resume", "--last"] : ["exec"];
-    args.push("--sandbox", optionBool(options, "write") ? "workspace-write" : "read-only", "--ask-for-approval", "never");
+    const args = ["--ask-for-approval", "never", "exec"];
+    args.push("--sandbox", optionBool(options, "write") ? "workspace-write" : "read-only");
     addRuntimeOptions(args, options);
+    if (optionBool(options, "resume")) {
+        args.push("resume", "--last");
+    }
     if (prompt)
         args.push(prompt);
     return {
@@ -236,6 +239,7 @@ function runProcess(request, job, { stream = true } = {}) {
             cwd: request.cwd,
             env: { ...process.env, NO_COLOR: "1" },
             windowsHide: true,
+            stdio: ["ignore", "pipe", "pipe"],
             shell: shouldUseShell(request.command)
         });
         upsertJob(request.cwd, {

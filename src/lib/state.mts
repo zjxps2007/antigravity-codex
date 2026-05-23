@@ -56,74 +56,105 @@ export function dataRoot(): string {
   );
 }
 
+const workspaceRootCache = new Map<string, string>();
+
+interface WorkspacePaths {
+  workspaceRoot: string;
+  stateDir: string;
+  jobsDir: string;
+  stateFile: string;
+}
+
 export function resolveWorkspaceRoot(cwd = process.cwd()): string {
   const resolved = path.resolve(cwd);
+  const cached = workspaceRootCache.get(resolved);
+  if (cached) {
+    return cached;
+  }
   const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
     cwd: resolved,
     encoding: "utf8",
     windowsHide: true
   });
+  let workspaceRoot = resolved;
   if (result.status === 0 && result.stdout.trim()) {
-    return path.resolve(result.stdout.trim());
+    workspaceRoot = path.resolve(result.stdout.trim());
   }
-  return resolved;
+  workspaceRootCache.set(resolved, workspaceRoot);
+  return workspaceRoot;
 }
 
 function workspaceKey(workspaceRoot: string): string {
   return createHash("sha256").update(path.resolve(workspaceRoot).toLowerCase()).digest("hex").slice(0, 16);
 }
 
+function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
+  const workspaceRoot = resolveWorkspaceRoot(cwd);
+  const stateDir = path.join(dataRoot(), "workspaces", workspaceKey(workspaceRoot));
+  return {
+    workspaceRoot,
+    stateDir,
+    jobsDir: path.join(stateDir, "jobs"),
+    stateFile: path.join(stateDir, "state.json")
+  };
+}
+
 export function workspaceStateDir(cwd = process.cwd()): string {
-  const root = resolveWorkspaceRoot(cwd);
-  return path.join(dataRoot(), "workspaces", workspaceKey(root));
+  return resolveWorkspacePaths(cwd).stateDir;
 }
 
-function stateFile(cwd = process.cwd()): string {
-  return path.join(workspaceStateDir(cwd), "state.json");
-}
-
-function defaultState(cwd = process.cwd()): CodexState {
+function defaultState(workspaceRoot: string): CodexState {
   return {
     version: STATE_VERSION,
-    workspaceRoot: resolveWorkspaceRoot(cwd),
+    workspaceRoot,
     jobs: []
   };
 }
 
-export function ensureStateDir(cwd = process.cwd()): void {
-  fs.mkdirSync(path.join(workspaceStateDir(cwd), "jobs"), { recursive: true });
+function ensureWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
+  const paths = resolveWorkspacePaths(cwd);
+  fs.mkdirSync(paths.jobsDir, { recursive: true });
+  return paths;
 }
 
-export function readState(cwd = process.cwd()): CodexState {
-  ensureStateDir(cwd);
-  const file = stateFile(cwd);
-  if (!fs.existsSync(file)) {
-    return defaultState(cwd);
+export function ensureStateDir(cwd = process.cwd()): void {
+  ensureWorkspacePaths(cwd);
+}
+
+function readStateFromPaths(paths: WorkspacePaths): CodexState {
+  if (!fs.existsSync(paths.stateFile)) {
+    return defaultState(paths.workspaceRoot);
   }
   try {
-    const parsed = JSON.parse(fs.readFileSync(file, "utf8")) as Partial<CodexState>;
+    const parsed = JSON.parse(fs.readFileSync(paths.stateFile, "utf8")) as Partial<CodexState>;
     return {
-      ...defaultState(cwd),
+      ...defaultState(paths.workspaceRoot),
       ...parsed,
       jobs: Array.isArray(parsed.jobs) ? parsed.jobs : []
     };
   } catch {
-    return defaultState(cwd);
+    return defaultState(paths.workspaceRoot);
   }
 }
 
-export function writeState(cwd: string, state: CodexState): CodexState {
-  ensureStateDir(cwd);
+export function readState(cwd = process.cwd()): CodexState {
+  return readStateFromPaths(ensureWorkspacePaths(cwd));
+}
+
+function writeStateToPaths(paths: WorkspacePaths, state: CodexState): CodexState {
   const next: CodexState = {
     ...state,
     version: STATE_VERSION,
     jobs: [...state.jobs].sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt))).slice(0, MAX_JOBS)
   };
-  const file = stateFile(cwd);
-  const tmpFile = `${file}.tmp`;
+  const tmpFile = `${paths.stateFile}.tmp`;
   fs.writeFileSync(tmpFile, `${JSON.stringify(next, null, 2)}\n`);
-  fs.renameSync(tmpFile, file);
+  fs.renameSync(tmpFile, paths.stateFile);
   return next;
+}
+
+export function writeState(cwd: string, state: CodexState): CodexState {
+  return writeStateToPaths(ensureWorkspacePaths(cwd), state);
 }
 
 export function generateJobId(prefix = "job"): string {
@@ -131,7 +162,7 @@ export function generateJobId(prefix = "job"): string {
 }
 
 export function jobDir(cwd: string, jobId: string): string {
-  return path.join(workspaceStateDir(cwd), "jobs", jobId);
+  return path.join(resolveWorkspacePaths(cwd).jobsDir, jobId);
 }
 
 export function writeJobArtifact(cwd: string, jobId: string, name: string, value: unknown): void {
@@ -151,7 +182,8 @@ export function readJobArtifact(cwd: string, jobId: string, name: string): strin
 }
 
 export function upsertJob(cwd: string, patch: Partial<Job> & { id: string }): Job {
-  const state = readState(cwd);
+  const paths = ensureWorkspacePaths(cwd);
+  const state = readStateFromPaths(paths);
   const existing = state.jobs.find((job) => job.id === patch.id);
   const now = nowIso();
   const nextJob: Job = {
@@ -161,7 +193,7 @@ export function upsertJob(cwd: string, patch: Partial<Job> & { id: string }): Jo
     createdAt: existing?.createdAt ?? patch.createdAt ?? now
   };
   state.jobs = [nextJob, ...state.jobs.filter((job) => job.id !== patch.id)];
-  writeState(cwd, state);
+  writeStateToPaths(paths, state);
   return nextJob;
 }
 
@@ -183,4 +215,3 @@ export function findLatestResultJob(cwd: string, reference = ""): Job | null {
   }
   return listJobs(cwd).find((job) => ["completed", "failed", "cancelled"].includes(job.status ?? "")) ?? null;
 }
-
