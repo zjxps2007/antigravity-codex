@@ -85,8 +85,20 @@ function normalizeEvent(event: ReviewGateEvent): ReviewGateEvent {
   };
 }
 
+let reviewGateDirCreated = false;
+
+function ensureReviewGateDir(): void {
+  if (!reviewGateDirCreated) {
+    const dir = reviewGateDir();
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    reviewGateDirCreated = true;
+  }
+}
+
 export function appendReviewGateEvent(event: ReviewGateEvent): void {
-  fs.mkdirSync(reviewGateDir(), { recursive: true });
+  ensureReviewGateDir();
   fs.appendFileSync(reviewGateEventsFile(), `${JSON.stringify(normalizeEvent(event))}\n`);
 }
 
@@ -128,7 +140,7 @@ export function readMonitorState(): MonitorState | null {
 }
 
 export function writeMonitorState(state: MonitorState): void {
-  fs.mkdirSync(reviewGateDir(), { recursive: true });
+  ensureReviewGateDir();
   fs.writeFileSync(monitorStateFile(), `${JSON.stringify(state, null, 2)}\n`);
 }
 

@@ -70,6 +70,8 @@ cat ~/.gemini/antigravity-cli/import_manifest.json
 /codex:status
 /codex:result
 /codex:cancel
+/codex:doctor
+/codex:doctor --run-hook-test
 /codex:monitor
 /codex:monitor --status
 /codex:monitor --stop
@@ -81,11 +83,13 @@ cat ~/.gemini/antigravity-cli/import_manifest.json
 
 `/codex:review`는 읽기 전용이며 기본적으로 현재 uncommitted changes를 리뷰하고, `--base <ref>`를 주면 해당 기준 ref와의 diff를 리뷰합니다. 커스텀 focus text는 받지 않습니다. 특정 관점이나 더 비판적인 리뷰가 필요하면 `/codex:adversarial-review`를 사용합니다.
 
-`/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
+`/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. workspace별 review-gate config를 켜고, Antigravity CLI가 런타임에 읽는 `~/.gemini/config/hooks.json`에 active Stop hook을 병합합니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
 
-Hook manifest는 정적 파일로 유지되고 패키지용 command만 커밋됩니다. `setup --enable-review-gate`는 로컬 Antigravity Codex 데이터 디렉터리의 workspace별 config만 수정하므로 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다.
+커밋되는 plugin hook manifest는 정적 파일로 유지되고 패키지용 npx command만 포함합니다. `setup --enable-review-gate`는 repo의 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다. 로컬 머신 경로는 사용자 전역 Antigravity hook 설정인 `~/.gemini/config/hooks.json`에만 기록됩니다.
 
 `/codex:monitor`는 review gate 실행 이력을 볼 수 있는 로컬 웹 UI를 `http://127.0.0.1:8765`에 띄웁니다. Stop hook은 시작/스킵/Codex 결과/최종 decision 이벤트를 로컬 Antigravity Codex 데이터 디렉터리에 저장하고, monitor는 Codex verdict, finding, raw event를 보여줍니다. 종료하려면 `/codex:monitor --stop`을 사용합니다. 기존 이벤트를 지우려면 `/codex:monitor --clear`를 사용합니다. 서버를 현재 터미널 프로세스에 붙여 실행하려면 `--foreground`를 사용합니다.
+
+`/codex:doctor`는 로컬 설치 상태, hook manifest, workspace별 review-gate 설정, git 상태, 이벤트 로그 경로를 한 번에 진단합니다. `/codex:doctor --run-hook-test`는 Codex를 호출하지 않는 bypass 모드로 격리된 smoke test를 실행해 hook command와 이벤트 기록 경로가 정상인지 확인합니다.
 
 ## 자동 리뷰 문제 확인
 
@@ -95,7 +99,10 @@ Hook manifest는 정적 파일로 유지되고 패키지용 command만 커밋됩
 agy plugin list
 cat ~/.gemini/antigravity-cli/import_manifest.json
 cat ~/.gemini/antigravity-cli/plugins/codex/hooks.json
+cat ~/.gemini/config/hooks.json
 node dist/agy-codex.mjs setup --json
+node dist/agy-codex.mjs doctor
+node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor --status --json
 ```
 
@@ -103,6 +110,7 @@ node dist/agy-codex.mjs monitor --status --json
 
 - `import_manifest.json`의 `codex` 플러그인 components에 `hooks`가 포함되어야 합니다.
 - `/codex:setup --enable-review-gate`가 현재 workspace에 대해 켜져 있어야 합니다.
+- `~/.gemini/config/hooks.json`에 active `codex-stop-review-gate` Stop hook이 있어야 합니다.
 - workspace가 git 저장소이고 uncommitted change가 있어야 합니다.
 - Antigravity가 파일 수정 후 Stop hook 지점에 도달해야 합니다.
 - Codex CLI 인증과 quota가 정상이어야 합니다.
@@ -110,6 +118,8 @@ node dist/agy-codex.mjs monitor --status --json
 `import_manifest.json`에 `hooks`가 없으면 `agy plugin uninstall codex` 후 `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`로 재설치합니다.
 
 monitor에 `Review Gate Runs`가 없으면 `/codex:monitor --status --json`이 출력하는 이벤트 파일 경로를 확인합니다. `events.jsonl`이 없으면 Stop hook이 아직 이벤트를 기록하지 않은 상태입니다. `Codex Jobs`와 `Review Gate Runs`는 별도입니다. `/codex:review` 같은 명시적 명령은 job으로 보이고, 자동 Stop-hook 리뷰는 review gate run으로 보입니다.
+
+`/codex:doctor --run-hook-test`가 성공하는데 `Review Gate Runs`가 계속 비어 있으면, 플러그인의 이벤트 기록과 monitor 읽기 경로는 정상입니다. 남은 문제는 해당 Antigravity 세션에서 자동 Stop hook이 호출되지 않는 것입니다. doctor가 active Stop hook 누락을 보고하면 `/codex:setup --enable-review-gate`를 다시 실행합니다.
 
 ## Companion CLI
 
@@ -124,6 +134,8 @@ node dist/agy-codex.mjs task --write "실패하는 테스트 수정"
 node dist/agy-codex.mjs status
 node dist/agy-codex.mjs result
 node dist/agy-codex.mjs cancel
+node dist/agy-codex.mjs doctor
+node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor
 node dist/agy-codex.mjs monitor --status
 node dist/agy-codex.mjs monitor --stop
@@ -146,6 +158,7 @@ Antigravity 환경에서 스킬 브라우징이 필요한 경우를 위해 `skil
 - `codex-status`: 현재 워크스페이스의 최근 Codex 작업 상태 조회
 - `codex-result`: 완료된 Codex 작업 결과 출력
 - `codex-cancel`: 실행 중인 Codex 작업 취소
+- `codex-doctor`: 설치, hook, review gate, monitor 이벤트 경로 진단
 - `codex-monitor`: review gate 실행 이력을 보여주는 로컬 웹 UI 관리
 
 기본 task 실행은 읽기 전용입니다. 파일 수정을 허용하려면 명시적으로 `--write`를 사용합니다.

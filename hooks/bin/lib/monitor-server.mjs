@@ -1,12 +1,17 @@
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { buildDoctorReport } from "./doctor.mjs";
+import { resolveRuntimeRoot } from "./exec-resolver.mjs";
 import { clearReviewGateEvents, clearMonitorState, readMonitorState, readReviewGateEvents, reviewGateEventsFile, writeMonitorState } from "./review-gate-events.mjs";
 import { renderMonitorHtml } from "./monitor-template.mjs";
 import { listJobs, clearJobs } from "./state.mjs";
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 8765;
 const MAX_LOG_TAIL_BYTES = 24_000;
+const ROOT_DIR = resolveRuntimeRoot(path.dirname(fileURLToPath(import.meta.url)));
 export function normalizeMonitorHost(value) {
     const host = value?.trim() || DEFAULT_MONITOR_HOST;
     if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
@@ -108,21 +113,26 @@ export function sendHtml(response, html) {
     response.end(html);
 }
 function readFileTail(file, maxBytes = MAX_LOG_TAIL_BYTES) {
-    if (!file || !fs.existsSync(file)) {
+    try {
+        if (!file || !fs.existsSync(file)) {
+            return "";
+        }
+        const stat = fs.statSync(file);
+        const length = Math.min(stat.size, maxBytes);
+        const buffer = Buffer.alloc(length);
+        const fd = fs.openSync(file, "r");
+        try {
+            fs.readSync(fd, buffer, 0, length, Math.max(0, stat.size - length));
+        }
+        finally {
+            fs.closeSync(fd);
+        }
+        const text = buffer.toString("utf8");
+        return stat.size > maxBytes ? `[showing last ${maxBytes} bytes]\n${text}` : text;
+    }
+    catch {
         return "";
     }
-    const stat = fs.statSync(file);
-    const length = Math.min(stat.size, maxBytes);
-    const buffer = Buffer.alloc(length);
-    const fd = fs.openSync(file, "r");
-    try {
-        fs.readSync(fd, buffer, 0, length, Math.max(0, stat.size - length));
-    }
-    finally {
-        fs.closeSync(fd);
-    }
-    const text = buffer.toString("utf8");
-    return stat.size > maxBytes ? `[showing last ${maxBytes} bytes]\n${text}` : text;
 }
 function monitorJob(job) {
     return {
@@ -143,37 +153,45 @@ function monitorJob(job) {
     };
 }
 export function handleMonitorRequest(request, response, state, shutdown) {
-    const url = new URL(request.url ?? "/", state.url);
-    if (request.method === "GET" && url.pathname === "/") {
-        sendHtml(response, renderMonitorHtml());
-        return;
+    try {
+        const url = new URL(request.url ?? "/", state.url);
+        if (request.method === "GET" && url.pathname === "/") {
+            sendHtml(response, renderMonitorHtml());
+            return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/health") {
+            sendJson(response, 200, { ok: true, monitor: state, eventsFile: reviewGateEventsFile() });
+            return;
+        }
+        if (request.method === "GET" && url.pathname === "/api/events") {
+            const limit = Number(url.searchParams.get("limit") ?? 200);
+            sendJson(response, 200, {
+                events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200),
+                jobs: listJobs(process.cwd()).slice(0, 20).map(monitorJob),
+                diagnostics: buildDoctorReport(process.cwd(), { rootDir: ROOT_DIR, checkExecutables: false }),
+                eventsFile: reviewGateEventsFile(),
+                monitor: state
+            });
+            return;
+        }
+        if (request.method === "DELETE" && url.pathname === "/api/events") {
+            clearReviewGateEvents();
+            clearJobs(process.cwd());
+            sendJson(response, 200, { cleared: true, eventsFile: reviewGateEventsFile() });
+            return;
+        }
+        if (request.method === "POST" && url.pathname === "/api/stop") {
+            sendJson(response, 200, { stopping: true });
+            setTimeout(shutdown, 50);
+            return;
+        }
+        sendJson(response, 404, { error: "Not found" });
     }
-    if (request.method === "GET" && url.pathname === "/api/health") {
-        sendJson(response, 200, { ok: true, monitor: state, eventsFile: reviewGateEventsFile() });
-        return;
+    catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        console.error(`[Monitor Server Error] ${request.method} ${request.url}:`, error);
+        sendJson(response, 500, { error: "Internal Server Error", message: msg });
     }
-    if (request.method === "GET" && url.pathname === "/api/events") {
-        const limit = Number(url.searchParams.get("limit") ?? 200);
-        sendJson(response, 200, {
-            events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200),
-            jobs: listJobs(process.cwd()).slice(0, 20).map(monitorJob),
-            eventsFile: reviewGateEventsFile(),
-            monitor: state
-        });
-        return;
-    }
-    if (request.method === "DELETE" && url.pathname === "/api/events") {
-        clearReviewGateEvents();
-        clearJobs(process.cwd());
-        sendJson(response, 200, { cleared: true, eventsFile: reviewGateEventsFile() });
-        return;
-    }
-    if (request.method === "POST" && url.pathname === "/api/stop") {
-        sendJson(response, 200, { stopping: true });
-        setTimeout(shutdown, 50);
-        return;
-    }
-    sendJson(response, 404, { error: "Not found" });
 }
 export function startMonitorServer(host, port) {
     return new Promise((resolve, reject) => {

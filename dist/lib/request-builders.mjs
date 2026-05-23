@@ -49,7 +49,7 @@ export function addRuntimeOptions(args, options) {
 }
 export function buildReviewRequest(cwd, options, positionals) {
     const codex = resolveCodexInvocation(cwd);
-    const args = ["exec", "review"];
+    const args = ["--ask-for-approval", "never", "exec", "review"];
     addRuntimeOptions(args, options);
     const prompt = positionals.join(" ").trim();
     if (prompt) {

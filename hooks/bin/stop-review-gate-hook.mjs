@@ -5,7 +5,7 @@ import process from "node:process";
 import { appendReviewGateEvent, createReviewGateRunId, nowIso } from "./lib/review-gate-events.mjs";
 import { formatReason } from "./lib/review-parser.mjs";
 import { runCodexReview } from "./lib/review-runner.mjs";
-import { isReviewGateEnabled } from "./lib/state.mjs";
+import { isReviewGateEnabled, listReviewGateEnabledWorkspaces } from "./lib/state.mjs";
 function readStdin() {
     return new Promise((resolve) => {
         let input = "";
@@ -47,9 +47,32 @@ function existingWorkspaces(input) {
     }
     return workspaces;
 }
+function uniqueExistingWorkspaces(candidates) {
+    const seen = new Set();
+    const workspaces = [];
+    for (const candidate of candidates) {
+        if (!candidate || !fs.existsSync(candidate))
+            continue;
+        const resolved = fs.realpathSync(candidate);
+        if (seen.has(resolved))
+            continue;
+        seen.add(resolved);
+        workspaces.push(resolved);
+    }
+    return workspaces;
+}
 function reviewWorkspace(input) {
-    const workspaces = existingWorkspaces(input);
-    return workspaces.find((candidate) => isReviewGateEnabled(candidate)) ?? workspaces[0] ?? process.cwd();
+    const directWorkspaces = uniqueExistingWorkspaces([
+        ...existingWorkspaces(input),
+        process.env.PWD,
+        process.env.INIT_CWD,
+        process.cwd()
+    ]);
+    const directEnabled = directWorkspaces.find((candidate) => isReviewGateEnabled(candidate));
+    if (directEnabled) {
+        return directEnabled;
+    }
+    return listReviewGateEnabledWorkspaces()[0] ?? directWorkspaces[0] ?? process.cwd();
 }
 function hasGitChanges(cwd) {
     const result = spawnSync("git", ["status", "--porcelain"], {
@@ -57,7 +80,7 @@ function hasGitChanges(cwd) {
         encoding: "utf8",
         windowsHide: true
     });
-    return result.status === 0 && Boolean(result.stdout.trim());
+    return result.status === 0 && Boolean(result.stdout?.trim());
 }
 async function main() {
     const input = parseInput(await readStdin());

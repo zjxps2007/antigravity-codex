@@ -61,20 +61,23 @@ function runHook(
   payload: unknown,
   dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-")),
   enabled = true,
-  workspacePaths = [workspace]
+  workspacePaths = [workspace],
+  hookCwd = workspace
 ) {
   if (enabled) {
     withDataRoot(dataRoot, () => setReviewGateEnabled(workspace, true));
   }
   return spawnSync(process.execPath, [hookScript], {
-    cwd: workspace,
+    cwd: hookCwd,
     input: JSON.stringify({ fullyIdle: true, terminationReason: "model_stop", workspacePaths }),
     encoding: "utf8",
     env: {
       ...process.env,
       AGY_CODEX_DATA: dataRoot,
       CODEX_BIN: fakeCodex,
-      FAKE_CODEX_PAYLOAD: JSON.stringify(payload)
+      FAKE_CODEX_PAYLOAD: JSON.stringify(payload),
+      INIT_CWD: hookCwd,
+      PWD: hookCwd
     }
   });
 }
@@ -146,6 +149,22 @@ test("review gate chooses enabled workspace from Antigravity workspace paths", (
   const payload = { verdict: "approve", summary: "ok", findings: [], next_steps: [] };
   const fakeCodex = makeFakeCodex(payload);
   const result = runHook(workspace, fakeCodex, payload, dataRoot, true, [brainDir, workspace]);
+  assert.equal(result.status, 0, result.stderr);
+
+  withDataRoot(dataRoot, () => {
+    const events = readReviewGateEvents(10);
+    assert.equal(events[0]?.workspace, workspace);
+    assert.ok(events.some((event) => event.type === "codex-result" && event.verdict === "approve"));
+  });
+});
+
+test("review gate falls back to enabled workspace state when Antigravity omits workspace paths", () => {
+  const workspace = makeGitWorkspace();
+  const hookCwd = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-hook-cwd-"));
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"));
+  const payload = { verdict: "approve", summary: "ok", findings: [], next_steps: [] };
+  const fakeCodex = makeFakeCodex(payload);
+  const result = runHook(workspace, fakeCodex, payload, dataRoot, true, [], hookCwd);
   assert.equal(result.status, 0, result.stderr);
 
   withDataRoot(dataRoot, () => {

@@ -20,14 +20,33 @@ export function resolveWorkspaceRoot(cwd = process.cwd()) {
     if (cached) {
         return cached;
     }
-    const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
-        cwd: resolved,
-        encoding: "utf8",
-        windowsHide: true
-    });
+    // Fast path: resolve git root completely in-process
+    let current = resolved;
+    let foundRoot = null;
+    while (true) {
+        const candidate = path.join(current, ".git");
+        if (fs.existsSync(candidate)) {
+            foundRoot = current;
+            break;
+        }
+        const parent = path.dirname(current);
+        if (parent === current)
+            break;
+        current = parent;
+    }
     let workspaceRoot = resolved;
-    if (result.status === 0 && result.stdout.trim()) {
-        workspaceRoot = path.resolve(result.stdout.trim());
+    if (foundRoot) {
+        workspaceRoot = foundRoot;
+    }
+    else {
+        const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
+            cwd: resolved,
+            encoding: "utf8",
+            windowsHide: true
+        });
+        if (result.status === 0 && result.stdout?.trim()) {
+            workspaceRoot = path.resolve(result.stdout.trim());
+        }
     }
     workspaceRootCache.set(resolved, workspaceRoot);
     return workspaceRoot;
@@ -47,6 +66,35 @@ function resolveWorkspacePaths(cwd = process.cwd()) {
 }
 export function workspaceStateDir(cwd = process.cwd()) {
     return resolveWorkspacePaths(cwd).stateDir;
+}
+export function listReviewGateEnabledWorkspaces() {
+    const workspacesDir = path.join(dataRoot(), "workspaces");
+    if (!fs.existsSync(workspacesDir)) {
+        return [];
+    }
+    const entries = fs.readdirSync(workspacesDir, { withFileTypes: true });
+    const candidates = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory())
+            continue;
+        const stateFile = path.join(workspacesDir, entry.name, "state.json");
+        try {
+            const state = JSON.parse(fs.readFileSync(stateFile, "utf8"));
+            if (state.config?.reviewGateEnabled &&
+                typeof state.workspaceRoot === "string" &&
+                fs.existsSync(state.workspaceRoot)) {
+                candidates.push({
+                    workspaceRoot: path.resolve(state.workspaceRoot),
+                    mtimeMs: fs.statSync(stateFile).mtimeMs
+                });
+            }
+        }
+        catch {
+            // Ignore malformed or stale workspace state.
+        }
+    }
+    const sorted = candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+    return Array.from(new Map(sorted.map((item) => [item.workspaceRoot, item.workspaceRoot])).values());
 }
 function defaultState(workspaceRoot) {
     return {
@@ -87,7 +135,7 @@ function readStateFromPaths(paths) {
     }
 }
 export function readState(cwd = process.cwd()) {
-    return readStateFromPaths(ensureWorkspacePaths(cwd));
+    return readStateFromPaths(resolveWorkspacePaths(cwd));
 }
 function cleanupOrphanedJobs(paths, activeJobIds) {
     try {
@@ -128,12 +176,22 @@ export function writeState(cwd, state) {
 export function readConfig(cwd = process.cwd()) {
     return readState(cwd).config;
 }
+const reviewGateEnabledCache = new Map();
 export function isReviewGateEnabled(cwd = process.cwd()) {
-    return readConfig(cwd).reviewGateEnabled;
+    const resolved = path.resolve(cwd);
+    const cached = reviewGateEnabledCache.get(resolved);
+    if (cached !== undefined) {
+        return cached;
+    }
+    const enabled = readConfig(resolved).reviewGateEnabled;
+    reviewGateEnabledCache.set(resolved, enabled);
+    return enabled;
 }
 export function setReviewGateEnabled(cwd, enabled) {
-    const state = readState(cwd);
-    return writeState(cwd, {
+    const resolved = path.resolve(cwd);
+    reviewGateEnabledCache.set(resolved, enabled);
+    const state = readState(resolved);
+    return writeState(resolved, {
         ...state,
         config: {
             ...state.config,

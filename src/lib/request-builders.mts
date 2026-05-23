@@ -65,7 +65,7 @@ export function buildReviewRequest(
   positionals: string[]
 ): CodexRequest {
   const codex = resolveCodexInvocation(cwd);
-  const args = ["exec", "review"];
+  const args = ["--ask-for-approval", "never", "exec", "review"];
   addRuntimeOptions(args, options);
 
   const prompt = positionals.join(" ").trim();

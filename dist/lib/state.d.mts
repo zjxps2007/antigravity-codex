@@ -39,6 +39,7 @@ export declare function nowIso(): string;
 export declare function dataRoot(): string;
 export declare function resolveWorkspaceRoot(cwd?: string): string;
 export declare function workspaceStateDir(cwd?: string): string;
+export declare function listReviewGateEnabledWorkspaces(): string[];
 export declare function ensureStateDir(cwd?: string): void;
 export declare function readState(cwd?: string): CodexState;
 export declare function writeState(cwd: string, state: CodexState): CodexState;

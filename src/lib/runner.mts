@@ -82,6 +82,7 @@ export function runProcess(
   { stream = true }: ExecutionOptions = {}
 ): Promise<ProcessResult> {
   const logFile = job.logFile ?? createLogFile(request.cwd, job.id);
+  fs.mkdirSync(path.dirname(logFile), { recursive: true });
   return new Promise((resolve) => {
     const child = spawn(request.command, request.args, {
       cwd: request.cwd,

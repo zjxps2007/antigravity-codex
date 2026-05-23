@@ -3,6 +3,8 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "./lib/args.mjs";
+import { inspectActiveReviewGateHook, installActiveReviewGateHook, NPX_REVIEW_GATE_COMMAND, removeActiveReviewGateHook } from "./lib/antigravity-hooks.mjs";
+import { buildDoctorReport, printDoctorReport } from "./lib/doctor.mjs";
 import { commandAvailable, codexAvailable, resolveRuntimeRoot } from "./lib/exec-resolver.mjs";
 import { handleMonitor, startMonitorServer, normalizeMonitorHost, parseMonitorPort } from "./lib/monitor-server.mjs";
 import { buildAdversarialRequest, buildReviewRequest, buildTaskRequest, optionBool, optionString } from "./lib/request-builders.mjs";
@@ -10,8 +12,6 @@ import { executeTrackedRequest, killProcessTree, runMaybeBackground } from "./li
 import { findJob, findLatestResultJob, isReviewGateEnabled, listJobs, nowIso, readJobArtifact, resolveWorkspaceRoot, setReviewGateEnabled, upsertJob, workspaceStateDir } from "./lib/state.mjs";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT_DIR = resolveRuntimeRoot(path.dirname(SCRIPT_PATH));
-const NPX_PACKAGE_SPEC = "github:zjxps2007/antigravity-codex";
-const NPX_REVIEW_GATE_COMMAND = `npx -y --package ${NPX_PACKAGE_SPEC} agy-codex-review-gate`;
 function reviewGateHookFile() {
     return path.join(ROOT_DIR, "hooks", "hooks.json");
 }
@@ -25,6 +25,7 @@ function usage() {
   node dist/agy-codex.mjs status [job-id] [--json]
   node dist/agy-codex.mjs result [job-id] [--json]
   node dist/agy-codex.mjs cancel [job-id] [--json]
+  node dist/agy-codex.mjs doctor [--json] [--run-hook-test]
   node dist/agy-codex.mjs monitor [--status|--stop|--clear|--foreground] [--port <port>] [--json]`);
 }
 // ---------------------------------------------------------------------------
@@ -39,20 +40,28 @@ async function handleSetup(argv) {
         throw new Error("Use only one of --enable-review-gate or --disable-review-gate.");
     }
     const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
+    let activeHook = inspectActiveReviewGateHook();
     if (optionBool(options, "enable-review-gate")) {
         setReviewGateEnabled(cwd, true);
+        activeHook = installActiveReviewGateHook(ROOT_DIR);
     }
     else if (optionBool(options, "disable-review-gate")) {
         setReviewGateEnabled(cwd, false);
+        activeHook = removeActiveReviewGateHook();
     }
     const node = commandAvailable("node", ["--version"], cwd);
     const codex = codexAvailable(cwd);
-    const ready = node.available && codex.available;
+    const reviewGateEnabled = isReviewGateEnabled(cwd);
+    const ready = node.available && codex.available && (!reviewGateEnabled || activeHook.installed);
     const reviewGate = {
-        enabled: isReviewGateEnabled(cwd),
+        enabled: reviewGateEnabled,
         configDir: workspaceStateDir(cwd),
         hooksFile: reviewGateHookFile(),
-        hookCommand: NPX_REVIEW_GATE_COMMAND
+        hookCommand: NPX_REVIEW_GATE_COMMAND,
+        activeHooksFile: activeHook.hooksFile,
+        activeHookInstalled: activeHook.installed,
+        activeHookCommand: activeHook.command,
+        activeHookError: activeHook.error
     };
     const payload = {
         ready,
@@ -60,7 +69,16 @@ async function handleSetup(argv) {
         codex,
         reviewGate,
         workspaceRoot: resolveWorkspaceRoot(cwd),
-        nextSteps: ready ? [] : ["Install Codex with `npm install -g @openai/codex` and run `codex login`."]
+        nextSteps: ready
+            ? []
+            : [
+                ...(node.available && codex.available
+                    ? []
+                    : ["Install Codex with `npm install -g @openai/codex` and run `codex login`."]),
+                ...(reviewGate.enabled && !reviewGate.activeHookInstalled
+                    ? [`Run \`/codex:setup --enable-review-gate\` to install the active Stop hook at ${reviewGate.activeHooksFile}.`]
+                    : [])
+            ]
     };
     if (optionBool(options, "json")) {
         console.log(JSON.stringify(payload, null, 2));
@@ -71,9 +89,29 @@ async function handleSetup(argv) {
     console.log(`Codex: ${codex.available ? codex.stdout : "missing"}`);
     console.log(`Workspace: ${payload.workspaceRoot}`);
     console.log(`Review gate: ${reviewGate.enabled ? "enabled" : "disabled"}`);
+    console.log(`Active Stop hook: ${reviewGate.activeHookInstalled ? `installed at ${reviewGate.activeHooksFile}` : `missing at ${reviewGate.activeHooksFile}`}`);
+    if (reviewGate.activeHookError) {
+        console.log(`Active Stop hook error: ${reviewGate.activeHookError}`);
+    }
     console.log(`Ready: ${ready ? "yes" : "no"}`);
     for (const step of payload.nextSteps)
         console.log(`- ${step}`);
+}
+function handleDoctor(argv) {
+    const { options } = parseArgs(argv, {
+        valueOptions: ["cwd"],
+        booleanOptions: ["json", "run-hook-test"]
+    });
+    const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
+    const report = buildDoctorReport(cwd, {
+        rootDir: ROOT_DIR,
+        runHookTest: optionBool(options, "run-hook-test")
+    });
+    if (optionBool(options, "json")) {
+        console.log(JSON.stringify(report, null, 2));
+        return;
+    }
+    printDoctorReport(report);
 }
 async function handleReview(argv, adversarial = false) {
     const { options, positionals } = parseArgs(argv, {
@@ -222,6 +260,9 @@ async function main() {
             break;
         case "cancel":
             handleCancel(argv);
+            break;
+        case "doctor":
+            handleDoctor(argv);
             break;
         case "monitor": {
             const { options } = parseArgs(argv, {

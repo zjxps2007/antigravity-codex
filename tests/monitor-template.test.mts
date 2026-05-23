@@ -41,7 +41,19 @@ function createFakeElement(elements: Map<string, FakeElement>, id: string): Fake
 
 test("monitor template renders event timeline and execution logs", async () => {
   const elements = new Map<string, FakeElement>();
-  for (const id of ["runs", "jobs", "updated", "events-file", "run-count", "job-count", "auto-refresh", "refresh", "clear", "stop"]) {
+  for (const id of [
+    "runs",
+    "jobs",
+    "updated",
+    "events-file",
+    "run-count",
+    "job-count",
+    "diagnostics",
+    "auto-refresh",
+    "refresh",
+    "clear",
+    "stop"
+  ]) {
     createFakeElement(elements, id);
   }
 
@@ -95,6 +107,14 @@ test("monitor template renders event timeline and execution logs", async () => {
             logTail: "job log line"
           }
         ],
+        diagnostics: {
+          diagnosis: "Manual hook logging works, but no automatic Antigravity Stop-hook event has been recorded.",
+          checks: [
+            { name: "Review gate config", status: "pass", message: "enabled" },
+            { name: "Review gate events", status: "warn", message: "no events" }
+          ],
+          nextSteps: ["Start a fresh Antigravity session."]
+        },
         eventsFile: "/tmp/events.jsonl"
       })
     }),
@@ -115,8 +135,12 @@ test("monitor template renders event timeline and execution logs", async () => {
 
   const output = elements.get("runs")?.innerHTML ?? "";
   const jobOutput = elements.get("jobs")?.innerHTML ?? "";
+  const diagnosticsOutput = elements.get("diagnostics")?.innerHTML ?? "";
   assert.equal(elements.get("run-count")?.textContent, "1");
   assert.equal(elements.get("job-count")?.textContent, "1");
+  assert.match(diagnosticsOutput, /Diagnostics/);
+  assert.match(diagnosticsOutput, /Manual hook logging works/);
+  assert.match(diagnosticsOutput, /Review gate config/);
   assert.match(output, /Event Timeline/);
   assert.match(output, /Execution Logs/);
   assert.match(output, /stdout log line/);

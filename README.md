@@ -70,6 +70,8 @@ Install the plugin, then use the slash commands as the primary interface:
 /codex:status
 /codex:result
 /codex:cancel
+/codex:doctor
+/codex:doctor --run-hook-test
 /codex:monitor
 /codex:monitor --status
 /codex:monitor --stop
@@ -81,11 +83,13 @@ The command files live under `commands/` and use `disable-model-invocation: true
 
 `/codex:review` is read-only and reviews the current uncommitted changes by default, or a branch diff when `--base <ref>` is provided. It does not accept custom focus text; use `/codex:adversarial-review` when you want focused or skeptical review instructions.
 
-`/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
+`/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. It updates the workspace review-gate config and merges the active Stop hook into `~/.gemini/config/hooks.json`, which is the hooks file Antigravity CLI loads at runtime. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
 
-The hook manifest is static and stays committed with its packaged command. `setup --enable-review-gate` only updates per-workspace config under the Antigravity Codex data directory, so it does not write local absolute paths into `hooks/hooks.json`.
+The committed plugin hook manifest is static and stays packaged with its npx command. `setup --enable-review-gate` does not write local absolute paths into the repo's `hooks/hooks.json`; local machine paths are written only to the user's active Antigravity hooks config under `~/.gemini/config/hooks.json`.
 
 `/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
+
+`/codex:doctor` diagnoses the local install, hook manifest, workspace review-gate config, git state, and event log path. Use `/codex:doctor --run-hook-test` to run an isolated bypass-mode smoke test that verifies the hook command and event writer without invoking Codex.
 
 ## Automatic Review Troubleshooting
 
@@ -95,7 +99,10 @@ Do not use web search to diagnose this plugin. The authoritative state is local:
 agy plugin list
 cat ~/.gemini/antigravity-cli/import_manifest.json
 cat ~/.gemini/antigravity-cli/plugins/codex/hooks.json
+cat ~/.gemini/config/hooks.json
 node dist/agy-codex.mjs setup --json
+node dist/agy-codex.mjs doctor
+node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor --status --json
 ```
 
@@ -103,6 +110,7 @@ For automatic review to run, all of the following must be true:
 
 - `import_manifest.json` lists `hooks` for the `codex` plugin.
 - `/codex:setup --enable-review-gate` has enabled the current workspace.
+- `~/.gemini/config/hooks.json` contains the active `codex-stop-review-gate` Stop hook.
 - The workspace is a git repository and has uncommitted changes.
 - Antigravity reaches a Stop hook point after editing.
 - The Codex CLI is authenticated and has quota available.
@@ -110,6 +118,8 @@ For automatic review to run, all of the following must be true:
 If `hooks` is missing from `import_manifest.json`, reinstall with `agy plugin uninstall codex` followed by `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`.
 
 If the monitor shows no `Review Gate Runs`, manually check the event file path reported by `/codex:monitor --status --json`. A missing `events.jsonl` means the Stop hook has not recorded any event yet. `Codex Jobs` are separate from `Review Gate Runs`: explicit commands such as `/codex:review` appear as jobs, while automatic Stop-hook reviews appear as review gate runs.
+
+If `/codex:doctor --run-hook-test` passes but `Review Gate Runs` remains empty, the plugin can write events and the monitor can read them; the missing piece is Antigravity invoking the automatic Stop hook for that session. Run `/codex:setup --enable-review-gate` again if doctor reports that the active Stop hook is missing.
 
 ## Companion CLI
 
@@ -124,6 +134,8 @@ node dist/agy-codex.mjs task --write "fix the failing test"
 node dist/agy-codex.mjs status
 node dist/agy-codex.mjs result
 node dist/agy-codex.mjs cancel
+node dist/agy-codex.mjs doctor
+node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor
 node dist/agy-codex.mjs monitor --status
 node dist/agy-codex.mjs monitor --stop

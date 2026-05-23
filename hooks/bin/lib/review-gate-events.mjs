@@ -37,8 +37,18 @@ function normalizeEvent(event) {
         reason: truncateText(event.reason)
     };
 }
+let reviewGateDirCreated = false;
+function ensureReviewGateDir() {
+    if (!reviewGateDirCreated) {
+        const dir = reviewGateDir();
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        reviewGateDirCreated = true;
+    }
+}
 export function appendReviewGateEvent(event) {
-    fs.mkdirSync(reviewGateDir(), { recursive: true });
+    ensureReviewGateDir();
     fs.appendFileSync(reviewGateEventsFile(), `${JSON.stringify(normalizeEvent(event))}\n`);
 }
 export function readReviewGateEvents(limit = 200) {
@@ -79,7 +89,7 @@ export function readMonitorState() {
     }
 }
 export function writeMonitorState(state) {
-    fs.mkdirSync(reviewGateDir(), { recursive: true });
+    ensureReviewGateDir();
     fs.writeFileSync(monitorStateFile(), `${JSON.stringify(state, null, 2)}\n`);
 }
 export function clearMonitorState() {

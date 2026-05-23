@@ -6,6 +6,7 @@ const files = [
   ["dist/agy-codex.mjs", "hooks/bin/agy-codex.mjs"],
   ["dist/stop-review-gate-hook.mjs", "hooks/bin/stop-review-gate-hook.mjs"],
   ["dist/lib/args.mjs", "hooks/bin/lib/args.mjs"],
+  ["dist/lib/antigravity-hooks.mjs", "hooks/bin/lib/antigravity-hooks.mjs"],
   ["dist/lib/exec-resolver.mjs", "hooks/bin/lib/exec-resolver.mjs"],
   ["dist/lib/request-builders.mjs", "hooks/bin/lib/request-builders.mjs"],
   ["dist/lib/review-gate-events.mjs", "hooks/bin/lib/review-gate-events.mjs"],
@@ -15,6 +16,7 @@ const files = [
   ["dist/lib/state.mjs", "hooks/bin/lib/state.mjs"],
   ["dist/lib/monitor-server.mjs", "hooks/bin/lib/monitor-server.mjs"],
   ["dist/lib/monitor-template.mjs", "hooks/bin/lib/monitor-template.mjs"],
+  ["dist/lib/doctor.mjs", "hooks/bin/lib/doctor.mjs"],
   ["schemas/review-output.schema.json", "hooks/schemas/review-output.schema.json"]
 ];
 

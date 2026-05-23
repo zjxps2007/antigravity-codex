@@ -358,6 +358,92 @@ export function renderMonitorHtml() {
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
+    .diagnostics {
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      background: var(--panel);
+      backdrop-filter: blur(20px) saturate(180%);
+      padding: 20px;
+      margin-bottom: 28px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    }
+
+    .diagnostics-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--panel-border);
+      margin-bottom: 14px;
+    }
+
+    .diagnostics-title {
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .diagnostics-message {
+      color: var(--text-muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .diagnostics-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .diagnostics-check {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr);
+      gap: 10px;
+      align-items: baseline;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      background: rgba(0, 0, 0, 0.14);
+    }
+
+    .diagnostics-check-name {
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    .diagnostics-check-message {
+      color: var(--text-muted);
+      font-size: 12px;
+      word-break: break-word;
+    }
+
+    .badge.warn {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+
+    .badge.pass {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .badge.fail {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .badge.skip {
+      background: rgba(148, 163, 184, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
     
     .runs {
       display: grid;
@@ -831,6 +917,9 @@ export function renderMonitorHtml() {
       .top { align-items: flex-start; flex-direction: column; padding: 20px 0; }
       .actions { justify-content: flex-start; width: 100%; }
       .meta { grid-template-columns: 1fr; gap: 12px; }
+      .diagnostics-head { flex-direction: column; align-items: flex-start; }
+      .diagnostics-grid { grid-template-columns: 1fr; }
+      .diagnostics-check { grid-template-columns: 1fr; gap: 4px; }
       .run-head { flex-direction: column; align-items: flex-start; gap: 10px; }
       .run-time { align-self: flex-start; }
       .event-row { grid-template-columns: 1fr; gap: 4px; }
@@ -891,6 +980,7 @@ export function renderMonitorHtml() {
         <span id="job-count">0</span>
       </div>
     </section>
+    <section id="diagnostics" class="diagnostics"></section>
     <section class="job-section">
       <h2 class="job-heading">Codex Jobs</h2>
       <div id="jobs" class="runs"></div>
@@ -907,6 +997,7 @@ export function renderMonitorHtml() {
     const eventsFileEl = document.getElementById('events-file');
     const runCountEl = document.getElementById('run-count');
     const jobCountEl = document.getElementById('job-count');
+    const diagnosticsEl = document.getElementById('diagnostics');
     const autoRefreshButton = document.getElementById('auto-refresh');
     const autoRefreshLabel = autoRefreshButton.querySelector('.auto-label');
     let autoRefreshTimer = null;
@@ -1166,6 +1257,39 @@ export function renderMonitorHtml() {
       \`;
     }
 
+    function renderDiagnostics(diagnostics) {
+      if (!diagnostics) {
+        return '<div class="diagnostics-message">Diagnostics are unavailable.</div>';
+      }
+      const checks = diagnostics.checks || [];
+      const failed = checks.filter((check) => check.status === 'fail').length;
+      const warnings = checks.filter((check) => check.status === 'warn').length;
+      const status = failed ? 'fail' : warnings ? 'warn' : 'pass';
+      const checksHtml = checks.map((check) => \`
+        <div class="diagnostics-check">
+          <span class="badge \${h(check.status || 'skip')}">\${h(check.status || 'skip')}</span>
+          <div>
+            <div class="diagnostics-check-name">\${h(check.name)}</div>
+            <div class="diagnostics-check-message">\${h(check.message)}</div>
+          </div>
+        </div>
+      \`).join('');
+      const nextSteps = (diagnostics.nextSteps || []).length
+        ? '<div class="summary">' + h((diagnostics.nextSteps || []).join('\\n')) + '</div>'
+        : '';
+      return \`
+        <div class="diagnostics-head">
+          <div>
+            <div class="diagnostics-title">Diagnostics</div>
+            <div class="diagnostics-message">\${h(diagnostics.diagnosis || '')}</div>
+          </div>
+          <span class="badge \${h(status)}">\${h(status)}</span>
+        </div>
+        <div class="diagnostics-grid">\${checksHtml}</div>
+        \${nextSteps}
+      \`;
+    }
+
     async function load() {
       if (loading) return;
       loading = true;
@@ -1178,6 +1302,7 @@ export function renderMonitorHtml() {
         eventsFileEl.textContent = data.eventsFile || '';
         runCountEl.textContent = String(runs.length);
         jobCountEl.textContent = String(jobs.length);
+        diagnosticsEl.innerHTML = renderDiagnostics(data.diagnostics);
         jobsEl.innerHTML = jobs.length ? jobs.map(renderJob).join('') : '<div class="empty">No Codex jobs found for this workspace.</div>';
         runsEl.innerHTML = runs.length ? runs.map(renderRun).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
       } finally {

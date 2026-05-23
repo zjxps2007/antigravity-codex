@@ -51,6 +51,7 @@ export function printQueued(job, asJson = false) {
 }
 export function runProcess(request, job, { stream = true } = {}) {
     const logFile = job.logFile ?? createLogFile(request.cwd, job.id);
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
     return new Promise((resolve) => {
         const child = spawn(request.command, request.args, {
             cwd: request.cwd,

@@ -16,8 +16,9 @@ For automatic review troubleshooting, check these local facts:
 1. `agy plugin list`
 2. `$HOME/.gemini/antigravity-cli/import_manifest.json` includes `"hooks"` in the `codex` plugin components
 3. `$HOME/.gemini/antigravity-cli/plugins/codex/hooks.json` contains `codex-stop-review-gate`
-4. `setup --json` reports `reviewGate.enabled: true`
-5. The current workspace is a git repository with uncommitted changes
+4. `$HOME/.gemini/config/hooks.json` contains the active `codex-stop-review-gate` Stop hook
+5. `setup --json` reports `reviewGate.enabled: true` and `reviewGate.activeHookInstalled: true`
+6. The current workspace is a git repository with uncommitted changes
 
 Resolve the companion script in this order:
 

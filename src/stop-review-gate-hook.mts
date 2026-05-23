@@ -10,7 +10,7 @@ import {
 } from "./lib/review-gate-events.mjs";
 import { formatReason, parseReviewPayload, type ReviewGatePayload } from "./lib/review-parser.mjs";
 import { runCodexReview } from "./lib/review-runner.mjs";
-import { isReviewGateEnabled } from "./lib/state.mjs";
+import { isReviewGateEnabled, listReviewGateEnabledWorkspaces } from "./lib/state.mjs";
 
 interface StopHookInput {
   terminationReason?: string;
@@ -63,9 +63,31 @@ function existingWorkspaces(input: StopHookInput): string[] {
   return workspaces;
 }
 
+function uniqueExistingWorkspaces(candidates: Array<string | undefined>): string[] {
+  const seen = new Set<string>();
+  const workspaces: string[] = [];
+  for (const candidate of candidates) {
+    if (!candidate || !fs.existsSync(candidate)) continue;
+    const resolved = fs.realpathSync(candidate);
+    if (seen.has(resolved)) continue;
+    seen.add(resolved);
+    workspaces.push(resolved);
+  }
+  return workspaces;
+}
+
 function reviewWorkspace(input: StopHookInput): string {
-  const workspaces = existingWorkspaces(input);
-  return workspaces.find((candidate) => isReviewGateEnabled(candidate)) ?? workspaces[0] ?? process.cwd();
+  const directWorkspaces = uniqueExistingWorkspaces([
+    ...existingWorkspaces(input),
+    process.env.PWD,
+    process.env.INIT_CWD,
+    process.cwd()
+  ]);
+  const directEnabled = directWorkspaces.find((candidate) => isReviewGateEnabled(candidate));
+  if (directEnabled) {
+    return directEnabled;
+  }
+  return listReviewGateEnabledWorkspaces()[0] ?? directWorkspaces[0] ?? process.cwd();
 }
 
 function hasGitChanges(cwd: string): boolean {
@@ -74,7 +96,7 @@ function hasGitChanges(cwd: string): boolean {
     encoding: "utf8",
     windowsHide: true
   });
-  return result.status === 0 && Boolean(result.stdout.trim());
+  return result.status === 0 && Boolean(result.stdout?.trim());
 }
 
 async function main(): Promise<void> {
