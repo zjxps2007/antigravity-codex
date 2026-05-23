@@ -1,10 +1,20 @@
 #!/usr/bin/env node
 import { spawn, spawnSync, type SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseArgs, type ParsedOptionValue } from "./lib/args.mjs";
+import {
+  clearReviewGateEvents,
+  clearMonitorState,
+  readMonitorState,
+  readReviewGateEvents,
+  reviewGateEventsFile,
+  writeMonitorState,
+  type MonitorState
+} from "./lib/review-gate-events.mjs";
 import {
   findJob,
   findLatestResultJob,
@@ -72,6 +82,8 @@ const MODEL_ALIASES = new Map<string, string>([["spark", "gpt-5.3-codex-spark"]]
 const VALID_EFFORTS = new Set(["minimal", "low", "medium", "high", "xhigh"]);
 const NPX_PACKAGE_SPEC = "github:zjxps2007/antigravity-codex";
 const NPX_REVIEW_GATE_COMMAND = `npx -y --package ${NPX_PACKAGE_SPEC} agy-codex-review-gate`;
+const DEFAULT_MONITOR_HOST = "127.0.0.1";
+const DEFAULT_MONITOR_PORT = 8765;
 
 function resolveRuntimeRoot(startDir: string): string {
   let current = path.resolve(startDir);
@@ -134,30 +146,42 @@ function resolveExecutable(command: string, args = ["--version"], cwd = process.
   return { command, result };
 }
 
+let cachedCodexInvocation: CodexInvocation | null = null;
+
 function resolveCodexInvocation(cwd = process.cwd()): CodexInvocation {
-  if (process.env.CODEX_BIN) {
-    if (/\.js$/i.test(process.env.CODEX_BIN)) {
-      return { command: process.execPath, args: [process.env.CODEX_BIN] };
-    }
-    return { command: process.env.CODEX_BIN, args: [] };
+  if (cachedCodexInvocation) {
+    return cachedCodexInvocation;
   }
 
-  if (process.platform === "win32") {
+  let invocation: CodexInvocation;
+  if (process.env.CODEX_BIN) {
+    if (/\.js$/i.test(process.env.CODEX_BIN)) {
+      invocation = { command: process.execPath, args: [process.env.CODEX_BIN] };
+    } else {
+      invocation = { command: process.env.CODEX_BIN, args: [] };
+    }
+  } else if (process.platform === "win32") {
     const found = spawnSync("where.exe", ["codex"], { cwd, encoding: "utf8", windowsHide: true });
     const paths =
       found.status === 0 ? found.stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+    invocation = { command: "codex", args: [] };
     for (const candidate of paths) {
       if (/\.exe$/i.test(candidate)) {
-        return { command: candidate, args: [] };
+        invocation = { command: candidate, args: [] };
+        break;
       }
       const codexJs = path.join(path.dirname(candidate), "node_modules", "@openai", "codex", "bin", "codex.js");
       if (fs.existsSync(codexJs)) {
-        return { command: process.execPath, args: [codexJs] };
+        invocation = { command: process.execPath, args: [codexJs] };
+        break;
       }
     }
+  } else {
+    invocation = { command: "codex", args: [] };
   }
 
-  return { command: "codex", args: [] };
+  cachedCodexInvocation = invocation;
+  return invocation;
 }
 
 function codexAvailable(cwd = process.cwd()): CommandAvailability {
@@ -187,7 +211,8 @@ function usage(): void {
   node dist/agy-codex.mjs task [--wait|--background] [--write] [--resume] [--model <model>] [--effort <effort>] <prompt>
   node dist/agy-codex.mjs status [job-id] [--json]
   node dist/agy-codex.mjs result [job-id] [--json]
-  node dist/agy-codex.mjs cancel [job-id] [--json]`);
+  node dist/agy-codex.mjs cancel [job-id] [--json]
+  node dist/agy-codex.mjs monitor [--status|--stop|--clear|--foreground] [--port <port>] [--json]`);
 }
 
 function normalizeModel(model: string | undefined): string | null {
@@ -731,6 +756,595 @@ function handleCancel(argv: string[]): void {
   }
 }
 
+function parseMonitorPort(value: string | undefined): number {
+  if (!value) return DEFAULT_MONITOR_PORT;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Monitor port must be an integer between 1 and 65535.");
+  }
+  return port;
+}
+
+function normalizeMonitorHost(value: string | undefined): string {
+  const host = value?.trim() || DEFAULT_MONITOR_HOST;
+  if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
+    throw new Error("Monitor host must be local: 127.0.0.1, localhost, or ::1.");
+  }
+  return host;
+}
+
+function monitorUrl(host: string, port: number): string {
+  return `http://${host === "::1" ? "[::1]" : host}:${port}`;
+}
+
+function processIsRunning(pid: number | null | undefined): boolean {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
+}
+
+function monitorHealth(state: MonitorState, timeoutMs = 600): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (healthy: boolean): void => {
+      if (settled) return;
+      settled = true;
+      resolve(healthy);
+    };
+    const request = http.get(`${state.url}/api/health`, { timeout: timeoutMs }, (response) => {
+      response.resume();
+      done(response.statusCode === 200);
+    });
+    request.on("timeout", () => {
+      request.destroy();
+      done(false);
+    });
+    request.on("error", () => done(false));
+  });
+}
+
+async function readActiveMonitor(): Promise<MonitorState | null> {
+  const state = readMonitorState();
+  if (!state) {
+    return null;
+  }
+  if (processIsRunning(state.pid) && (await monitorHealth(state))) {
+    return state;
+  }
+  clearMonitorState();
+  return null;
+}
+
+async function waitForMonitor(state: MonitorState, timeoutMs = 2500): Promise<boolean> {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    if (processIsRunning(state.pid) && (await monitorHealth(state, 400))) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  return false;
+}
+
+function printMonitorState(state: MonitorState | null, asJson: boolean): void {
+  if (asJson) {
+    console.log(JSON.stringify({ running: Boolean(state), monitor: state, eventsFile: reviewGateEventsFile() }, null, 2));
+    return;
+  }
+  if (!state) {
+    console.log("Codex monitor is not running.");
+    console.log(`Events file: ${reviewGateEventsFile()}`);
+    return;
+  }
+  console.log(`Codex monitor running at ${state.url}`);
+  console.log(`PID: ${state.pid}`);
+  console.log(`Events file: ${reviewGateEventsFile()}`);
+  console.log("Stop with: /codex:monitor --stop");
+}
+
+function sendJson(response: http.ServerResponse, status: number, payload: unknown): void {
+  response.writeHead(status, {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(JSON.stringify(payload, null, 2));
+}
+
+function sendHtml(response: http.ServerResponse, html: string): void {
+  response.writeHead(200, {
+    "content-type": "text/html; charset=utf-8",
+    "cache-control": "no-store"
+  });
+  response.end(html);
+}
+
+function renderMonitorHtml(): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codex Review Gate Monitor</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f9;
+      --panel: #ffffff;
+      --text: #18202a;
+      --muted: #667085;
+      --line: #d9dee7;
+      --blue: #2563eb;
+      --green: #15803d;
+      --red: #b42318;
+      --amber: #b7791f;
+      --ink: #111827;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+    header {
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+    .wrap {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+    }
+    .top {
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 680;
+      letter-spacing: 0;
+    }
+    .sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    button {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 0 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--blue);
+      border-color: var(--blue);
+      color: white;
+    }
+    button.danger {
+      color: var(--red);
+    }
+    main {
+      padding: 18px 0 32px;
+    }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      min-width: 0;
+    }
+    .metric b {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 620;
+    }
+    .metric span {
+      overflow-wrap: anywhere;
+    }
+    .runs {
+      display: grid;
+      gap: 10px;
+    }
+    .run {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--muted);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+    .run.allow { border-left-color: var(--green); }
+    .run.continue { border-left-color: var(--red); }
+    .run.running { border-left-color: var(--amber); }
+    .run-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .run-title {
+      font-weight: 680;
+      margin-bottom: 4px;
+    }
+    .run-time {
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 2px 9px;
+      font-size: 12px;
+      font-weight: 680;
+      background: #eef2ff;
+      color: #243b8f;
+    }
+    .badge.allow { background: #dcfce7; color: #14532d; }
+    .badge.continue { background: #fee2e2; color: #7f1d1d; }
+    .badge.running { background: #fef3c7; color: #78350f; }
+    .summary {
+      margin: 10px 0;
+      color: var(--text);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .findings {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .finding {
+      border-top: 1px solid var(--line);
+      padding-top: 9px;
+      line-height: 1.45;
+    }
+    .finding b {
+      color: var(--ink);
+    }
+    .location {
+      color: var(--muted);
+      font-size: 12px;
+      margin-left: 6px;
+    }
+    details {
+      margin-top: 10px;
+    }
+    summary {
+      cursor: pointer;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    pre {
+      overflow: auto;
+      max-height: 340px;
+      background: #111827;
+      color: #e5e7eb;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: 28px;
+      text-align: center;
+    }
+    @media (max-width: 760px) {
+      .top { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+      .actions { justify-content: flex-start; }
+      .meta { grid-template-columns: 1fr; }
+      .run-head { flex-direction: column; }
+      .run-time { white-space: normal; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap top">
+      <div>
+        <h1>Codex Review Gate Monitor</h1>
+        <div class="sub">Local view of automatic Stop hook reviews</div>
+      </div>
+      <div class="actions">
+        <button id="refresh" class="primary" type="button">Refresh</button>
+        <button id="clear" type="button">Clear Events</button>
+        <button id="stop" class="danger" type="button">Stop Monitor</button>
+      </div>
+    </div>
+  </header>
+  <main class="wrap">
+    <section class="meta">
+      <div class="metric"><b>Last Updated</b><span id="updated">Loading</span></div>
+      <div class="metric"><b>Events File</b><span id="events-file">Loading</span></div>
+      <div class="metric"><b>Runs</b><span id="run-count">0</span></div>
+    </section>
+    <section id="runs" class="runs"></section>
+  </main>
+  <script>
+    const runsEl = document.getElementById('runs');
+    const updatedEl = document.getElementById('updated');
+    const eventsFileEl = document.getElementById('events-file');
+    const runCountEl = document.getElementById('run-count');
+
+    function h(value) {
+      return String(value == null ? '' : value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function groupEvents(events) {
+      const map = new Map();
+      for (const event of events) {
+        if (!map.has(event.id)) map.set(event.id, []);
+        map.get(event.id).push(event);
+      }
+      return [...map.entries()].map(([id, items]) => {
+        items.sort((a, b) => Date.parse(a.time || 0) - Date.parse(b.time || 0));
+        return { id, items, last: items[items.length - 1] || {} };
+      }).sort((a, b) => Date.parse(b.last.time || 0) - Date.parse(a.last.time || 0));
+    }
+
+    function pick(items, type) {
+      return [...items].reverse().find((event) => event.type === type);
+    }
+
+    function renderFindings(findings) {
+      if (!findings || !findings.length) return '';
+      return '<div class="findings">' + findings.map((finding) => {
+        const location = finding.file ? finding.file + (finding.line ? ':' + finding.line : '') : '';
+        return '<div class="finding"><b>' + h((finding.severity ? '[' + finding.severity + '] ' : '') + (finding.title || 'Finding')) + '</b>' +
+          (location ? '<span class="location">' + h(location) + '</span>' : '') +
+          (finding.description ? '<div>' + h(finding.description) + '</div>' : '') +
+          (finding.recommendation ? '<div><b>Recommendation:</b> ' + h(finding.recommendation) + '</div>' : '') +
+          '</div>';
+      }).join('') + '</div>';
+    }
+
+    function renderRun(run) {
+      const started = pick(run.items, 'started');
+      const result = pick(run.items, 'codex-result');
+      const decision = pick(run.items, 'decision');
+      const status = decision ? decision.decision : 'running';
+      const verdict = (decision && decision.verdict) || (result && result.verdict) || 'pending';
+      const summary = (decision && decision.summary) || (result && result.summary) || (started && started.message) || '';
+      const findings = (decision && decision.findings) || (result && result.findings) || [];
+      const raw = { id: run.id, events: run.items };
+      return '<article class="run ' + h(status) + '">' +
+        '<div class="run-head"><div><div class="run-title">' + h(started && started.workspace || 'Workspace unavailable') + '</div>' +
+        '<span class="badge ' + h(status) + '">' + h(status) + '</span> <span class="badge">' + h(verdict) + '</span></div>' +
+        '<div class="run-time">' + h(new Date(run.last.time || Date.now()).toLocaleString()) + '</div></div>' +
+        (summary ? '<div class="summary">' + h(summary) + '</div>' : '') +
+        renderFindings(findings) +
+        '<details><summary>Raw events</summary><pre>' + h(JSON.stringify(raw, null, 2)) + '</pre></details>' +
+        '</article>';
+    }
+
+    async function load() {
+      const response = await fetch('/api/events?limit=200', { cache: 'no-store' });
+      const data = await response.json();
+      const runs = groupEvents(data.events || []);
+      updatedEl.textContent = new Date().toLocaleString();
+      eventsFileEl.textContent = data.eventsFile || '';
+      runCountEl.textContent = String(runs.length);
+      runsEl.innerHTML = runs.length ? runs.map(renderRun).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
+    }
+
+    document.getElementById('refresh').addEventListener('click', load);
+    document.getElementById('clear').addEventListener('click', async () => {
+      await fetch('/api/events', { method: 'DELETE' });
+      await load();
+    });
+    document.getElementById('stop').addEventListener('click', async () => {
+      await fetch('/api/stop', { method: 'POST' });
+      document.body.innerHTML = '<main class="wrap"><div class="empty">Monitor stopped.</div></main>';
+    });
+    load().catch((error) => {
+      runsEl.innerHTML = '<div class="empty">' + h(error.message || error) + '</div>';
+    });
+    setInterval(load, 1500);
+  </script>
+</body>
+</html>`;
+}
+
+function handleMonitorRequest(
+  request: http.IncomingMessage,
+  response: http.ServerResponse,
+  state: MonitorState,
+  shutdown: () => void
+): void {
+  const url = new URL(request.url ?? "/", state.url);
+  if (request.method === "GET" && url.pathname === "/") {
+    sendHtml(response, renderMonitorHtml());
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/health") {
+    sendJson(response, 200, { ok: true, monitor: state, eventsFile: reviewGateEventsFile() });
+    return;
+  }
+  if (request.method === "GET" && url.pathname === "/api/events") {
+    const limit = Number(url.searchParams.get("limit") ?? 200);
+    sendJson(response, 200, {
+      events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200),
+      eventsFile: reviewGateEventsFile(),
+      monitor: state
+    });
+    return;
+  }
+  if (request.method === "DELETE" && url.pathname === "/api/events") {
+    clearReviewGateEvents();
+    sendJson(response, 200, { cleared: true, eventsFile: reviewGateEventsFile() });
+    return;
+  }
+  if (request.method === "POST" && url.pathname === "/api/stop") {
+    sendJson(response, 200, { stopping: true });
+    setTimeout(shutdown, 50);
+    return;
+  }
+  sendJson(response, 404, { error: "Not found" });
+}
+
+function startMonitorServer(host: string, port: number): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let state: MonitorState | null = null;
+    let closing = false;
+    const server = http.createServer((request, response) => {
+      if (!state) {
+        sendJson(response, 503, { error: "Monitor is starting." });
+        return;
+      }
+      handleMonitorRequest(request, response, state, shutdown);
+    });
+    const shutdown = (): void => {
+      if (closing) return;
+      closing = true;
+      clearMonitorState();
+      server.close(() => resolve());
+    };
+    server.on("error", reject);
+    server.listen(port, host, () => {
+      const address = server.address();
+      const actualPort = typeof address === "object" && address ? address.port : port;
+      state = {
+        pid: process.pid,
+        host,
+        port: actualPort,
+        url: monitorUrl(host, actualPort),
+        startedAt: nowIso()
+      };
+      writeMonitorState(state);
+      console.log(`Codex monitor running at ${state.url}`);
+      console.log(`Events file: ${reviewGateEventsFile()}`);
+    });
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
+}
+
+function stopMonitorProcess(pid: number): void {
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/PID", String(pid), "/F"], { stdio: "ignore", windowsHide: true });
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    // Already stopped.
+  }
+}
+
+async function handleMonitor(argv: string[]): Promise<void> {
+  const { options } = parseArgs(argv, {
+    valueOptions: ["host", "port"],
+    booleanOptions: ["json", "status", "stop", "clear", "foreground"]
+  });
+  const asJson = optionBool(options, "json");
+
+  if (optionBool(options, "clear")) {
+    clearReviewGateEvents();
+    if (asJson) {
+      console.log(JSON.stringify({ cleared: true, eventsFile: reviewGateEventsFile() }, null, 2));
+    } else {
+      console.log(`Cleared review gate events: ${reviewGateEventsFile()}`);
+    }
+    return;
+  }
+
+  if (optionBool(options, "status")) {
+    printMonitorState(await readActiveMonitor(), asJson);
+    return;
+  }
+
+  if (optionBool(options, "stop")) {
+    const active = await readActiveMonitor();
+    if (active) {
+      stopMonitorProcess(active.pid);
+      clearMonitorState();
+    }
+    if (asJson) {
+      console.log(JSON.stringify({ stopped: Boolean(active), monitor: active }, null, 2));
+    } else {
+      console.log(active ? `Stopped Codex monitor on ${active.url}.` : "Codex monitor is not running.");
+    }
+    return;
+  }
+
+  const host = normalizeMonitorHost(optionString(options, "host"));
+  const port = parseMonitorPort(optionString(options, "port"));
+  if (optionBool(options, "foreground")) {
+    await startMonitorServer(host, port);
+    return;
+  }
+
+  const active = await readActiveMonitor();
+  if (active) {
+    printMonitorState(active, asJson);
+    return;
+  }
+
+  const child = spawn(process.execPath, [SCRIPT_PATH, "monitor-server", "--host", host, "--port", String(port)], {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env: process.env
+  });
+  child.unref();
+  if (!child.pid) {
+    throw new Error("Failed to start Codex monitor.");
+  }
+
+  const state: MonitorState = {
+    pid: child.pid,
+    host,
+    port,
+    url: monitorUrl(host, port),
+    startedAt: nowIso()
+  };
+  writeMonitorState(state);
+  if (!(await waitForMonitor(state))) {
+    stopMonitorProcess(child.pid);
+    clearMonitorState();
+    throw new Error(`Codex monitor did not become reachable at ${state.url}.`);
+  }
+  printMonitorState(await readActiveMonitor(), asJson);
+}
+
 async function main(): Promise<void> {
   const [subcommand, ...argv] = process.argv.slice(2);
   switch (subcommand) {
@@ -761,6 +1375,17 @@ async function main(): Promise<void> {
     case "cancel":
       handleCancel(argv);
       break;
+    case "monitor":
+      await handleMonitor(argv);
+      break;
+    case "monitor-server": {
+      const { options } = parseArgs(argv, { valueOptions: ["host", "port"] });
+      await startMonitorServer(
+        normalizeMonitorHost(optionString(options, "host")),
+        parseMonitorPort(optionString(options, "port"))
+      );
+      break;
+    }
     case "help":
     case "--help":
     case undefined:

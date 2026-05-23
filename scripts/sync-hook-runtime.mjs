@@ -6,6 +6,7 @@ const files = [
   ["dist/agy-codex.mjs", "hooks/bin/agy-codex.mjs"],
   ["dist/stop-review-gate-hook.mjs", "hooks/bin/stop-review-gate-hook.mjs"],
   ["dist/lib/args.mjs", "hooks/bin/lib/args.mjs"],
+  ["dist/lib/review-gate-events.mjs", "hooks/bin/lib/review-gate-events.mjs"],
   ["dist/lib/state.mjs", "hooks/bin/lib/state.mjs"],
   ["schemas/review-output.schema.json", "hooks/schemas/review-output.schema.json"]
 ];

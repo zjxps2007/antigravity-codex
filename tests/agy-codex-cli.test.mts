@@ -50,3 +50,41 @@ test("review supports base refs without focus text", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.deepEqual(JSON.parse(result.stdout.trim()), ["exec", "review", "--base", "main"]);
 });
+
+test("monitor status reports stopped without a running server", () => {
+  const fake = makeFakeCodex();
+  const result = spawnSync(process.execPath, [companion, "monitor", "--status", "--json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AGY_CODEX_DATA: fake.dataRoot,
+      CODEX_BIN: fake.script
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { running: boolean };
+  assert.equal(payload.running, false);
+});
+
+test("monitor clear removes stored review gate events", () => {
+  const fake = makeFakeCodex();
+  const eventsDir = path.join(fake.dataRoot, "review-gate");
+  const eventsFile = path.join(eventsDir, "events.jsonl");
+  fs.mkdirSync(eventsDir, { recursive: true });
+  fs.writeFileSync(eventsFile, '{"id":"old","time":"now","type":"started"}\n');
+
+  const result = spawnSync(process.execPath, [companion, "monitor", "--clear", "--json"], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AGY_CODEX_DATA: fake.dataRoot,
+      CODEX_BIN: fake.script
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { cleared: boolean };
+  assert.equal(payload.cleared, true);
+  assert.equal(fs.existsSync(eventsFile), false);
+});

@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { readReviewGateEvents } from "../dist/lib/review-gate-events.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const hookScript = path.join(repoRoot, "dist", "stop-review-gate-hook.mjs");
@@ -39,13 +40,14 @@ function makeFakeCodex(payload: unknown): string {
   return script;
 }
 
-function runHook(workspace: string, fakeCodex: string, payload: unknown) {
+function runHook(workspace: string, fakeCodex: string, payload: unknown, dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"))) {
   return spawnSync(process.execPath, [hookScript], {
     cwd: workspace,
     input: JSON.stringify({ fullyIdle: true, terminationReason: "model_stop", workspacePaths: [workspace] }),
     encoding: "utf8",
     env: {
       ...process.env,
+      AGY_CODEX_DATA: dataRoot,
       CODEX_BIN: fakeCodex,
       FAKE_CODEX_PAYLOAD: JSON.stringify(payload)
     }
@@ -84,4 +86,28 @@ test("review gate continues when Codex reports actionable findings", () => {
   assert.equal(output.decision, "continue");
   assert.match(output.reason, /Broken behavior/);
   assert.match(output.reason, /file\.txt:1/);
+});
+
+test("review gate records monitor events", () => {
+  const workspace = makeGitWorkspace();
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"));
+  const payload = { verdict: "approve", summary: "ok", findings: [], next_steps: [] };
+  const fakeCodex = makeFakeCodex(payload);
+  const result = runHook(workspace, fakeCodex, payload, dataRoot);
+  assert.equal(result.status, 0, result.stderr);
+
+  const previousDataRoot = process.env.AGY_CODEX_DATA;
+  process.env.AGY_CODEX_DATA = dataRoot;
+  try {
+    const events = readReviewGateEvents(10);
+    assert.equal(events[0]?.type, "started");
+    assert.ok(events.some((event) => event.type === "codex-result" && event.verdict === "approve"));
+    assert.ok(events.some((event) => event.type === "decision" && event.decision === "allow"));
+  } finally {
+    if (previousDataRoot === undefined) {
+      delete process.env.AGY_CODEX_DATA;
+    } else {
+      process.env.AGY_CODEX_DATA = previousDataRoot;
+    }
+  }
 });

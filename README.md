@@ -57,6 +57,11 @@ Install the plugin, then use the slash commands as the primary interface:
 /codex:status
 /codex:result
 /codex:cancel
+/codex:monitor
+/codex:monitor --status
+/codex:monitor --stop
+/codex:monitor --clear
+/codex:monitor --foreground
 ```
 
 The command files live under `commands/` and use `disable-model-invocation: true`, so they are intended for explicit command invocation rather than natural-language auto-routing.
@@ -64,6 +69,8 @@ The command files live under `commands/` and use `disable-model-invocation: true
 `/codex:review` is read-only and reviews the current uncommitted changes by default, or a branch diff when `--base <ref>` is provided. It does not accept custom focus text; use `/codex:adversarial-review` when you want focused or skeptical review instructions.
 
 `/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
+
+`/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
 
 ## Companion CLI
 
@@ -78,6 +85,11 @@ node dist/agy-codex.mjs task --write "fix the failing test"
 node dist/agy-codex.mjs status
 node dist/agy-codex.mjs result
 node dist/agy-codex.mjs cancel
+node dist/agy-codex.mjs monitor
+node dist/agy-codex.mjs monitor --status
+node dist/agy-codex.mjs monitor --stop
+node dist/agy-codex.mjs monitor --clear
+node dist/agy-codex.mjs monitor --foreground
 ```
 
 Use `--background` on `review`, `adversarial-review`, `rescue`, or `task` to queue work and return immediately.

@@ -141,6 +141,21 @@ export function readState(cwd = process.cwd()): CodexState {
   return readStateFromPaths(ensureWorkspacePaths(cwd));
 }
 
+function cleanupOrphanedJobs(paths: WorkspacePaths, activeJobIds: Set<string>): void {
+  try {
+    if (!fs.existsSync(paths.jobsDir)) return;
+    const entries = fs.readdirSync(paths.jobsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory() && !activeJobIds.has(entry.name)) {
+        const dirPath = path.join(paths.jobsDir, entry.name);
+        fs.rmSync(dirPath, { recursive: true, force: true });
+      }
+    }
+  } catch {
+    // Best effort cleanup.
+  }
+}
+
 function writeStateToPaths(paths: WorkspacePaths, state: CodexState): CodexState {
   const next: CodexState = {
     ...state,
@@ -150,6 +165,10 @@ function writeStateToPaths(paths: WorkspacePaths, state: CodexState): CodexState
   const tmpFile = `${paths.stateFile}.tmp`;
   fs.writeFileSync(tmpFile, `${JSON.stringify(next, null, 2)}\n`);
   fs.renameSync(tmpFile, paths.stateFile);
+
+  const activeJobIds = new Set(next.jobs.map((job) => job.id));
+  cleanupOrphanedJobs(paths, activeJobIds);
+
   return next;
 }
 

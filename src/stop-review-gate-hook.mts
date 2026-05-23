@@ -5,6 +5,12 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
+import {
+  appendReviewGateEvent,
+  createReviewGateRunId,
+  nowIso,
+  type ReviewGateEvent
+} from "./lib/review-gate-events.mjs";
 
 interface StopHookInput {
   terminationReason?: string;
@@ -50,6 +56,14 @@ function respond(payload: unknown): void {
 
 function allow(): void {
   respond({ decision: "allow" });
+}
+
+function recordEvent(event: ReviewGateEvent): void {
+  try {
+    appendReviewGateEvent(event);
+  } catch {
+    // Review gate logging must never block Antigravity from stopping.
+  }
 }
 
 function parseInput(raw: string): StopHookInput {
@@ -181,38 +195,103 @@ function runCodexReview(cwd: string): { payload: ReviewGatePayload | null; stdou
 
 async function main(): Promise<void> {
   const input = parseInput(await readStdin());
-  if (process.env.AGY_CODEX_REVIEW_GATE_BYPASS === "1") {
+  const cwd = firstWorkspace(input);
+  const id = createReviewGateRunId();
+  const startedAt = Date.now();
+  const baseEvent = { id, workspace: cwd };
+  recordEvent({
+    ...baseEvent,
+    time: nowIso(),
+    type: "started",
+    message: `terminationReason=${input.terminationReason ?? "unknown"} fullyIdle=${String(input.fullyIdle)}`
+  });
+
+  const finishAllow = (message: string, payload?: ReviewGatePayload | null): void => {
+    recordEvent({
+      ...baseEvent,
+      time: nowIso(),
+      type: "decision",
+      decision: "allow",
+      verdict: payload?.verdict,
+      summary: payload?.summary ?? message,
+      findings: payload?.findings,
+      nextSteps: payload?.next_steps,
+      durationMs: Date.now() - startedAt,
+      payload
+    });
     allow();
+  };
+
+  const finishContinue = (reason: string, payload: ReviewGatePayload): void => {
+    recordEvent({
+      ...baseEvent,
+      time: nowIso(),
+      type: "decision",
+      decision: "continue",
+      verdict: payload.verdict,
+      summary: payload.summary,
+      findings: payload.findings,
+      nextSteps: payload.next_steps,
+      reason,
+      durationMs: Date.now() - startedAt,
+      payload
+    });
+    respond({ decision: "continue", reason });
+  };
+
+  if (process.env.AGY_CODEX_REVIEW_GATE_BYPASS === "1") {
+    recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Bypassed by AGY_CODEX_REVIEW_GATE_BYPASS." });
+    finishAllow("Bypassed by AGY_CODEX_REVIEW_GATE_BYPASS.");
     return;
   }
   if (input.fullyIdle === false || input.terminationReason === "error") {
-    allow();
+    recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Stop hook was not a fully idle normal stop." });
+    finishAllow("Stop hook was not a fully idle normal stop.");
     return;
   }
 
-  const cwd = firstWorkspace(input);
   if (!hasGitChanges(cwd)) {
-    allow();
+    recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "No git changes to review." });
+    finishAllow("No git changes to review.");
     return;
   }
 
   const review = runCodexReview(cwd);
+  recordEvent({
+    ...baseEvent,
+    time: nowIso(),
+    type: "codex-result",
+    status: review.status,
+    verdict: review.payload?.verdict,
+    summary: review.payload?.summary,
+    findings: review.payload?.findings,
+    nextSteps: review.payload?.next_steps,
+    stdout: review.stdout,
+    stderr: review.stderr,
+    payload: review.payload
+  });
   if (review.status !== 0) {
     process.stderr.write(review.stderr || review.stdout);
-    allow();
+    recordEvent({
+      ...baseEvent,
+      time: nowIso(),
+      type: "error",
+      status: review.status,
+      message: "Codex review gate command failed.",
+      stdout: review.stdout,
+      stderr: review.stderr
+    });
+    finishAllow("Codex review gate command failed.", review.payload);
     return;
   }
 
   const payload = review.payload;
   if (!payload || payload.verdict !== "needs-attention") {
-    allow();
+    finishAllow(payload ? "Codex approved the changes." : "Codex review gate output could not be parsed.", payload);
     return;
   }
 
-  respond({
-    decision: "continue",
-    reason: formatReason(payload, review.stdout || review.stderr)
-  });
+  finishContinue(formatReason(payload, review.stdout || review.stderr), payload);
 }
 
 main().catch((error: unknown) => {
