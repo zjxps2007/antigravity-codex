@@ -815,226 +815,763 @@ function renderMonitorHtml(): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Codex Review Gate Monitor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light;
-      --bg: #f6f7f9;
-      --panel: #ffffff;
-      --text: #18202a;
-      --muted: #667085;
-      --line: #d9dee7;
-      --blue: #2563eb;
-      --green: #15803d;
-      --red: #b42318;
-      --amber: #b7791f;
-      --ink: #111827;
+      color-scheme: dark;
+      --bg-start: #030712;
+      --bg-end: #090d16;
+      --panel: rgba(17, 24, 39, 0.45);
+      --panel-hover: rgba(24, 32, 53, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.05);
+      --panel-border-hover: rgba(99, 102, 241, 0.25);
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --ink: #ffffff;
+
+      /* Vibrant Tailored HSL Colors */
+      --indigo: 250, 89%, 65%;
+      --indigo-glow: rgba(99, 102, 241, 0.15);
+
+      --success: 142, 70%, 45%;
+      --success-glow: rgba(16, 185, 129, 0.12);
+
+      --danger: 350, 80%, 55%;
+      --danger-glow: rgba(239, 68, 68, 0.12);
+
+      --warning: 38, 92%, 50%;
+      --warning-glow: rgba(245, 158, 11, 0.12);
+
+      --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
-    * { box-sizing: border-box; }
+
+    * {
+      box-sizing: border-box;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     body {
       margin: 0;
-      background: var(--bg);
+      background: radial-gradient(circle at 50% 0%, #111827, #030712);
       color: var(--text);
-      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--font-sans);
       font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
     }
+
+    /* Ambient background glow elements */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -10%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 80vw;
+      height: 60vh;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.08) 0%, rgba(99, 102, 241, 0) 70%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -10%;
+      right: 5%;
+      width: 400px;
+      height: 400px;
+      background: radial-gradient(circle, rgba(236, 72, 153, 0.03) 0%, rgba(236, 72, 153, 0) 70%);
+      z-index: -1;
+      pointer-events: none;
+    }
+
     header {
-      border-bottom: 1px solid var(--line);
-      background: var(--panel);
+      border-bottom: 1px solid var(--panel-border);
+      background: rgba(3, 7, 18, 0.7);
+      backdrop-filter: blur(20px) saturate(180%);
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
+
     .wrap {
-      width: min(1180px, calc(100vw - 32px));
+      width: min(1200px, calc(100vw - 32px));
       margin: 0 auto;
     }
+
     .top {
-      min-height: 72px;
+      min-height: 80px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 16px;
     }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-glow {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      border-radius: 10px;
+      color: #a5b4fc;
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+    }
+
+    .logo-glow::after {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #6366f1, #a5b4fc);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+
     h1 {
       margin: 0;
       font-size: 22px;
-      font-weight: 680;
-      letter-spacing: 0;
+      font-weight: 700;
+      background: linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.025em;
     }
+
     .sub {
-      margin-top: 4px;
-      color: var(--muted);
-      font-size: 13px;
+      margin-top: 2px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
     }
+
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      background: rgb(16, 185, 129);
+      border-radius: 50%;
+      position: relative;
+      display: inline-block;
+    }
+
+    .live-dot::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(16, 185, 129, 0.4);
+      border-radius: 50%;
+      animation: pulse-ring 1.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+    }
+
+    @keyframes pulse-ring {
+      0% { transform: scale(0.5); opacity: 1; }
+      80%, 100% { transform: scale(1.8); opacity: 0; }
+    }
+
     .actions {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 12px;
       flex-wrap: wrap;
-      justify-content: flex-end;
     }
+
     button {
-      height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--ink);
-      padding: 0 12px;
-      font: inherit;
+      height: 40px;
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text);
+      padding: 0 16px;
+      font-weight: 600;
+      font-size: 13px;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    button:active {
+      transform: translateY(-1px);
+    }
+
+    button svg {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      transition: color 0.2s ease;
+    }
+
+    button:hover svg {
+      color: var(--text);
+    }
+
     button.primary {
-      background: var(--blue);
-      border-color: var(--blue);
-      color: white;
+      background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+      border-color: rgba(99, 102, 241, 0.5);
+      box-shadow: 0 0 15px var(--indigo-glow), 0 2px 4px rgba(0, 0, 0, 0.3);
     }
+    button.primary:hover {
+      background: linear-gradient(135deg, #584feb 0%, #7578f5 100%);
+      border-color: rgba(99, 102, 241, 0.8);
+      box-shadow: 0 0 25px rgba(99, 102, 241, 0.4), 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+    button.primary svg {
+      color: #ffffff;
+    }
+
+    button.toggle {
+      color: #c7d2fe;
+      border-color: rgba(99, 102, 241, 0.22);
+      background: rgba(99, 102, 241, 0.07);
+    }
+
+    button.toggle:hover {
+      border-color: rgba(99, 102, 241, 0.45);
+      background: rgba(99, 102, 241, 0.13);
+    }
+
+    button.toggle.active {
+      color: #bbf7d0;
+      border-color: rgba(16, 185, 129, 0.4);
+      background: rgba(16, 185, 129, 0.12);
+      box-shadow: 0 0 18px rgba(16, 185, 129, 0.18), 0 2px 4px rgba(0, 0, 0, 0.3);
+    }
+
+    button.toggle.active svg {
+      color: #86efac;
+    }
+
     button.danger {
-      color: var(--red);
+      color: #fca5a5;
+      border-color: rgba(239, 68, 68, 0.2);
+      background: rgba(239, 68, 68, 0.08);
     }
+    button.danger:hover {
+      background: rgba(239, 68, 68, 0.16);
+      border-color: rgba(239, 68, 68, 0.5);
+      color: #ffffff;
+      box-shadow: 0 0 20px rgba(239, 68, 68, 0.25);
+    }
+    button.danger svg {
+      color: #fca5a5;
+    }
+    button.danger:hover svg {
+      color: #ffffff;
+    }
+
     main {
-      padding: 18px 0 32px;
+      padding: 32px 0 64px;
     }
+
     .meta {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 10px;
-      margin-bottom: 14px;
+      gap: 20px;
+      margin-bottom: 32px;
     }
+
     .metric {
-      border: 1px solid var(--line);
-      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
       background: var(--panel);
-      padding: 12px;
-      min-width: 0;
+      backdrop-filter: blur(20px) saturate(180%);
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
     }
+
+    .metric::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: linear-gradient(180deg, #6366f1, #4f46e5);
+    }
+
+    .metric.runs-count::before {
+      background: linear-gradient(180deg, #10b981, #059669);
+    }
+
     .metric b {
       display: block;
-      margin-bottom: 4px;
-      font-size: 12px;
-      color: var(--muted);
-      font-weight: 620;
+      margin-bottom: 8px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      font-weight: 700;
     }
+
     .metric span {
-      overflow-wrap: anywhere;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink);
+      word-break: break-all;
     }
+    .metric.runs-count span {
+      font-size: 26px;
+      font-weight: 800;
+      line-height: 1.1;
+      background: linear-gradient(135deg, #ffffff 0%, #10b981 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
     .runs {
       display: grid;
-      gap: 10px;
+      gap: 20px;
     }
+
     .run {
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--muted);
-      border-radius: 8px;
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
       background: var(--panel);
-      padding: 14px;
+      backdrop-filter: blur(20px) saturate(180%);
+      padding: 24px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+      position: relative;
+      animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
-    .run.allow { border-left-color: var(--green); }
-    .run.continue { border-left-color: var(--red); }
-    .run.running { border-left-color: var(--amber); }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .run::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 6px;
+      height: 100%;
+      border-radius: 16px 0 0 16px;
+      background: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .run:hover {
+      background: var(--panel-hover);
+      border-color: var(--panel-border-hover);
+      transform: translateY(-3px);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.1);
+    }
+
+    .run.allow::before {
+      background: rgb(16, 185, 129);
+    }
+    .run.allow:hover {
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.08);
+    }
+
+    .run.continue::before {
+      background: rgb(239, 68, 68);
+    }
+    .run.continue:hover {
+      border-color: rgba(239, 68, 68, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.08);
+    }
+
+    .run.running::before {
+      background: rgb(245, 158, 11);
+    }
+    .run.running:hover {
+      border-color: rgba(245, 158, 11, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.08);
+    }
+
     .run-head {
       display: flex;
       justify-content: space-between;
-      gap: 12px;
+      gap: 16px;
       align-items: flex-start;
+      border-bottom: 1px solid var(--panel-border);
+      padding-bottom: 16px;
+      margin-bottom: 16px;
     }
+
     .run-title {
-      font-weight: 680;
-      margin-bottom: 4px;
+      font-size: 17px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.015em;
     }
+
     .run-time {
-      color: var(--muted);
+      color: var(--text-muted);
       font-size: 12px;
-      white-space: nowrap;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.03);
+      padding: 4px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--panel-border);
     }
+
+    .badge-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
     .badge {
       display: inline-flex;
       align-items: center;
-      min-height: 24px;
-      border-radius: 999px;
-      padding: 2px 9px;
-      font-size: 12px;
-      font-weight: 680;
-      background: #eef2ff;
-      color: #243b8f;
+      height: 24px;
+      border-radius: 8px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      gap: 6px;
     }
-    .badge.allow { background: #dcfce7; color: #14532d; }
-    .badge.continue { background: #fee2e2; color: #7f1d1d; }
-    .badge.running { background: #fef3c7; color: #78350f; }
+
+    .badge.allow {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .badge.continue {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .badge.running {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.2);
+    }
+    .badge.needs-attention {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .badge.approve {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .badge svg {
+      width: 12px;
+      height: 12px;
+    }
+
     .summary {
-      margin: 10px 0;
+      margin: 16px 0;
       color: var(--text);
-      line-height: 1.45;
-      overflow-wrap: anywhere;
+      line-height: 1.6;
+      font-size: 14.5px;
+      background: rgba(255, 255, 255, 0.015);
+      padding: 12px 16px;
+      border-radius: 10px;
+      border-left: 3px solid rgba(255, 255, 255, 0.15);
     }
+
+    .run.allow .summary {
+      border-left-color: rgba(16, 185, 129, 0.4);
+    }
+    .run.continue .summary {
+      border-left-color: rgba(239, 68, 68, 0.4);
+    }
+    .run.running .summary {
+      border-left-color: rgba(245, 158, 11, 0.4);
+    }
+
+    .findings-container {
+      margin-top: 20px;
+    }
+
+    .findings-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .findings {
       display: grid;
-      gap: 8px;
-      margin-top: 10px;
+      gap: 12px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid rgba(255, 255, 255, 0.03);
     }
+
     .finding {
-      border-top: 1px solid var(--line);
-      padding-top: 9px;
-      line-height: 1.45;
+      position: relative;
+      padding: 12px 14px 12px 28px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid rgba(255, 255, 255, 0.02);
     }
+
+    .finding::before {
+      content: '';
+      position: absolute;
+      left: 14px;
+      top: 18px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      box-shadow: 0 0 8px var(--text-muted);
+    }
+
+    .finding.severity-high, .finding.severity-critical {
+      border-left: 3px solid rgba(239, 68, 68, 0.4);
+      background: rgba(239, 68, 68, 0.02);
+    }
+    .finding.severity-high::before, .finding.severity-critical::before {
+      background: rgb(239, 68, 68);
+      box-shadow: 0 0 8px rgb(239, 68, 68);
+    }
+
+    .finding.severity-medium {
+      border-left: 3px solid rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.02);
+    }
+    .finding.severity-medium::before {
+      background: rgb(245, 158, 11);
+      box-shadow: 0 0 8px rgb(245, 158, 11);
+    }
+
+    .finding.severity-low {
+      border-left: 3px solid rgba(99, 102, 241, 0.4);
+      background: rgba(99, 102, 241, 0.02);
+    }
+    .finding.severity-low::before {
+      background: rgb(99, 102, 241);
+      box-shadow: 0 0 8px rgb(99, 102, 241);
+    }
+
+    .finding-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
     .finding b {
       color: var(--ink);
+      font-weight: 600;
+      font-size: 14px;
     }
+
     .location {
-      color: var(--muted);
-      font-size: 12px;
-      margin-left: 6px;
+      background: rgba(165, 180, 252, 0.1);
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      color: #a5b4fc;
+      border: 1px solid rgba(165, 180, 252, 0.15);
+      cursor: pointer;
     }
+    .location:hover {
+      background: rgba(165, 180, 252, 0.18);
+      color: #ffffff;
+    }
+
+    .finding-desc {
+      margin-top: 6px;
+      color: var(--text-muted);
+      font-size: 13.5px;
+      line-height: 1.5;
+    }
+
+    .finding-rec {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #c7d2fe;
+      background: rgba(99, 102, 241, 0.06);
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(99, 102, 241, 0.1);
+    }
+
     details {
-      margin-top: 10px;
+      margin-top: 18px;
+      background: rgba(0, 0, 0, 0.15);
+      border: 1px solid var(--panel-border);
+      border-radius: 10px;
+      overflow: hidden;
     }
+
     summary {
       cursor: pointer;
-      color: var(--muted);
-      font-size: 13px;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 10px 14px;
+      outline: none;
+      user-select: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.01);
+      border-bottom: 1px solid transparent;
     }
+    summary:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    details[open] summary {
+      border-bottom-color: var(--panel-border);
+      background: rgba(255, 255, 255, 0.02);
+    }
+
     pre {
       overflow: auto;
-      max-height: 340px;
-      background: #111827;
-      color: #e5e7eb;
-      border-radius: 8px;
-      padding: 12px;
+      max-height: 300px;
+      background: #02040a;
+      color: #e6edf3;
+      padding: 14px;
+      font-family: var(--font-mono);
       font-size: 12px;
-      line-height: 1.45;
+      line-height: 1.6;
+      margin: 0;
     }
+
     .empty {
-      border: 1px dashed var(--line);
-      border-radius: 8px;
+      border: 2px dashed var(--panel-border);
+      border-radius: 16px;
       background: var(--panel);
-      color: var(--muted);
-      padding: 28px;
+      color: var(--text-muted);
+      padding: 64px 32px;
       text-align: center;
+      font-size: 15px;
+      font-weight: 500;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
     }
-    @media (max-width: 760px) {
-      .top { align-items: flex-start; flex-direction: column; padding: 14px 0; }
-      .actions { justify-content: flex-start; }
-      .meta { grid-template-columns: 1fr; }
-      .run-head { flex-direction: column; }
-      .run-time { white-space: normal; }
+
+    /* Animations */
+    @keyframes pulse {
+      0% { opacity: 0.6; }
+      50% { opacity: 1; }
+      100% { opacity: 0.6; }
+    }
+
+    .badge.running {
+      animation: pulse 1.8s infinite ease-in-out;
+    }
+
+    .spin {
+      animation: rotate 1.5s linear infinite;
+    }
+
+    @keyframes rotate {
+      100% { transform: rotate(360deg); }
+    }
+
+    @media (max-width: 768px) {
+      .top { align-items: flex-start; flex-direction: column; padding: 20px 0; }
+      .actions { justify-content: flex-start; width: 100%; }
+      .meta { grid-template-columns: 1fr; gap: 12px; }
+      .run-head { flex-direction: column; align-items: flex-start; gap: 10px; }
+      .run-time { align-self: flex-start; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="wrap top">
-      <div>
-        <h1>Codex Review Gate Monitor</h1>
-        <div class="sub">Local view of automatic Stop hook reviews</div>
+      <div class="logo-container">
+        <div class="logo-glow">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.57-.598-3.75h-.152c-3.196 0-6.1-1.248-8.25-3.285z" /></svg>
+        </div>
+        <div>
+          <h1>Codex Review Gate Monitor</h1>
+          <div class="sub">
+            <span class="live-dot"></span>
+            Local review companion live system
+          </div>
+        </div>
       </div>
       <div class="actions">
-        <button id="refresh" class="primary" type="button">Refresh</button>
-        <button id="clear" type="button">Clear Events</button>
-        <button id="stop" class="danger" type="button">Stop Monitor</button>
+        <button id="refresh" class="primary" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+          Refresh
+        </button>
+        <button id="auto-refresh" class="toggle" type="button" aria-pressed="false" title="Toggle automatic refresh every 2 seconds">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+          <span class="auto-label">Auto Off</span>
+        </button>
+        <button id="clear" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+          Clear Events
+        </button>
+        <button id="stop" class="danger" type="button">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" /></svg>
+          Stop Monitor
+        </button>
       </div>
     </div>
   </header>
   <main class="wrap">
     <section class="meta">
-      <div class="metric"><b>Last Updated</b><span id="updated">Loading</span></div>
-      <div class="metric"><b>Events File</b><span id="events-file">Loading</span></div>
-      <div class="metric"><b>Runs</b><span id="run-count">0</span></div>
+      <div class="metric">
+        <b>Last Updated</b>
+        <span id="updated">Loading...</span>
+      </div>
+      <div class="metric">
+        <b>Events Log Stream</b>
+        <span id="events-file">Loading...</span>
+      </div>
+      <div class="metric runs-count">
+        <b>Total Runs</b>
+        <span id="run-count">0</span>
+      </div>
     </section>
     <section id="runs" class="runs"></section>
   </main>
@@ -1043,6 +1580,21 @@ function renderMonitorHtml(): string {
     const updatedEl = document.getElementById('updated');
     const eventsFileEl = document.getElementById('events-file');
     const runCountEl = document.getElementById('run-count');
+    const autoRefreshButton = document.getElementById('auto-refresh');
+    const autoRefreshLabel = autoRefreshButton.querySelector('.auto-label');
+    let autoRefreshTimer = null;
+    let autoRefreshEnabled = false;
+    let loading = false;
+
+    const ICONS = {
+      allow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      approve: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      continue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>',
+      'needs-attention': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>',
+      running: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>',
+      pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      finding: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>'
+    };
 
     function h(value) {
       return String(value == null ? '' : value)
@@ -1071,14 +1623,26 @@ function renderMonitorHtml(): string {
 
     function renderFindings(findings) {
       if (!findings || !findings.length) return '';
-      return '<div class="findings">' + findings.map((finding) => {
+
+      const itemsHtml = findings.map((finding) => {
         const location = finding.file ? finding.file + (finding.line ? ':' + finding.line : '') : '';
-        return '<div class="finding"><b>' + h((finding.severity ? '[' + finding.severity + '] ' : '') + (finding.title || 'Finding')) + '</b>' +
-          (location ? '<span class="location">' + h(location) + '</span>' : '') +
-          (finding.description ? '<div>' + h(finding.description) + '</div>' : '') +
-          (finding.recommendation ? '<div><b>Recommendation:</b> ' + h(finding.recommendation) + '</div>' : '') +
+        const severityClass = finding.severity ? 'severity-' + finding.severity.toLowerCase() : '';
+        const severityLabel = finding.severity ? finding.severity.toUpperCase() : 'FINDING';
+
+        return '<div class="finding ' + h(severityClass) + '">' +
+          '<div class="finding-header">' +
+          '<b>[' + h(severityLabel) + '] ' + h(finding.title || 'Finding') + '</b>' +
+          (location ? '<span class="location" title="Click to copy path" onclick="navigator.clipboard.writeText(\\\'' + location.replaceAll('\\\\', '\\\\\\\\').replaceAll('\\\'', '\\\\\\\'') + '\\\')">' + h(location) + '</span>' : '') +
+          '</div>' +
+          (finding.description ? '<div class="finding-desc">' + h(finding.description) + '</div>' : '') +
+          (finding.recommendation ? '<div class="finding-rec"><b>💡 Recommendation:</b> ' + h(finding.recommendation) + '</div>' : '') +
           '</div>';
-      }).join('') + '</div>';
+      }).join('');
+
+      return '<div class="findings-container">' +
+        '<div class="findings-title">' + ICONS.finding + ' Actionable Findings (' + findings.length + ')</div>' +
+        '<div class="findings">' + itemsHtml + '</div>' +
+        '</div>';
     }
 
     function renderRun(run) {
@@ -1090,39 +1654,87 @@ function renderMonitorHtml(): string {
       const summary = (decision && decision.summary) || (result && result.summary) || (started && started.message) || '';
       const findings = (decision && decision.findings) || (result && result.findings) || [];
       const raw = { id: run.id, events: run.items };
+
+      const statusIcon = ICONS[status] || '';
+      const verdictIcon = ICONS[verdict] || '';
+
       return '<article class="run ' + h(status) + '">' +
-        '<div class="run-head"><div><div class="run-title">' + h(started && started.workspace || 'Workspace unavailable') + '</div>' +
-        '<span class="badge ' + h(status) + '">' + h(status) + '</span> <span class="badge">' + h(verdict) + '</span></div>' +
-        '<div class="run-time">' + h(new Date(run.last.time || Date.now()).toLocaleString()) + '</div></div>' +
+        '<div class="run-head">' +
+        '<div>' +
+        '<div class="run-title">' + h(started && started.workspace || 'Workspace review') + '</div>' +
+        '<div class="badge-group">' +
+        '<span class="badge ' + h(status) + '">' + statusIcon + h(status) + '</span>' +
+        '<span class="badge ' + h(verdict) + '">' + verdictIcon + h(verdict) + '</span>' +
+        '</div>' +
+        '</div>' +
+        '<div class="run-time">' + h(new Date(run.last.time || Date.now()).toLocaleString()) + '</div>' +
+        '</div>' +
         (summary ? '<div class="summary">' + h(summary) + '</div>' : '') +
         renderFindings(findings) +
-        '<details><summary>Raw events</summary><pre>' + h(JSON.stringify(raw, null, 2)) + '</pre></details>' +
+        '<details>' +
+        '<summary>' +
+        '<svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" /></svg>' +
+        'Raw events payload' +
+        '</summary>' +
+        '<pre>' + h(JSON.stringify(raw, null, 2)) + '</pre>' +
+        '</details>' +
         '</article>';
     }
 
     async function load() {
-      const response = await fetch('/api/events?limit=200', { cache: 'no-store' });
-      const data = await response.json();
-      const runs = groupEvents(data.events || []);
-      updatedEl.textContent = new Date().toLocaleString();
-      eventsFileEl.textContent = data.eventsFile || '';
-      runCountEl.textContent = String(runs.length);
-      runsEl.innerHTML = runs.length ? runs.map(renderRun).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
+      if (loading) return;
+      loading = true;
+      try {
+        const response = await fetch('/api/events?limit=200', { cache: 'no-store' });
+        const data = await response.json();
+        const runs = groupEvents(data.events || []);
+        updatedEl.textContent = new Date().toLocaleString();
+        eventsFileEl.textContent = data.eventsFile || '';
+        runCountEl.textContent = String(runs.length);
+        runsEl.innerHTML = runs.length ? runs.map(renderRun).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
+      } finally {
+        loading = false;
+      }
     }
 
-    document.getElementById('refresh').addEventListener('click', load);
+    function showLoadError(error) {
+      runsEl.innerHTML = '<div class="empty">' + h(error.message || error) + '</div>';
+    }
+
+    function setAutoRefresh(enabled) {
+      autoRefreshEnabled = enabled;
+      autoRefreshButton.classList.toggle('active', enabled);
+      autoRefreshButton.setAttribute('aria-pressed', String(enabled));
+      autoRefreshLabel.textContent = enabled ? 'Auto On' : 'Auto Off';
+      if (autoRefreshTimer) {
+        clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+      }
+      if (enabled) {
+        autoRefreshTimer = setInterval(() => {
+          load().catch(showLoadError);
+        }, 2000);
+        load().catch(showLoadError);
+      }
+    }
+
+    document.getElementById('refresh').addEventListener('click', () => load().catch(showLoadError));
+    autoRefreshButton.addEventListener('click', () => setAutoRefresh(!autoRefreshEnabled));
     document.getElementById('clear').addEventListener('click', async () => {
-      await fetch('/api/events', { method: 'DELETE' });
-      await load();
+      if (confirm('Are you sure you want to clear all review events?')) {
+        await fetch('/api/events', { method: 'DELETE' });
+        await load();
+      }
     });
     document.getElementById('stop').addEventListener('click', async () => {
-      await fetch('/api/stop', { method: 'POST' });
-      document.body.innerHTML = '<main class="wrap"><div class="empty">Monitor stopped.</div></main>';
+      if (confirm('Are you sure you want to stop the review gate monitor?')) {
+        await fetch('/api/stop', { method: 'POST' });
+        document.body.innerHTML = '<main class="wrap"><div class="empty">Monitor has been stopped. You can safely close this page.</div></main>';
+      }
     });
     load().catch((error) => {
-      runsEl.innerHTML = '<div class="empty">' + h(error.message || error) + '</div>';
+      showLoadError(error);
     });
-    setInterval(load, 1500);
   </script>
 </body>
 </html>`;
