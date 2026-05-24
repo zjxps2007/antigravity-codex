@@ -1,10 +1,20 @@
 # Antigravity Codex
 
-Antigravity에서 로컬 OpenAI Codex CLI를 호출해 코드 리뷰와 백그라운드 엔지니어링 작업을 위임하는 플러그인입니다.
-
-직접 작성하는 소스는 `src/`와 `tests/` 아래 TypeScript로 관리합니다. 커밋된 `dist/` 파일은 Antigravity 플러그인 설치 후 바로 실행하기 위한 빌드 산출물입니다.
-
 English documentation: [README.md](README.md)
+
+Antigravity Codex는 Antigravity에서 로컬 OpenAI Codex CLI를 호출하기 위한 플러그인입니다. 명시적인 `/codex:*` 명령으로 리뷰와 작업 위임을 수행하고, 선택적으로 Antigravity가 작업을 마치려는 시점에 Codex가 read-only 리뷰를 수행하는 review gate를 제공합니다.
+
+## 주요 기능
+
+- Antigravity에서 Codex read-only 리뷰 실행
+- 명시적인 명령을 통한 Codex 작업 위임
+- 선택형 Stop-hook review gate
+  - Antigravity가 코드 수정
+  - Antigravity가 멈추려는 시점에 Stop hook 실행
+  - Codex가 현재 git 변경사항을 read-only로 리뷰
+  - `approve`면 종료 허용
+  - `needs-attention`이면 `continue`를 반환해 Antigravity가 계속 수정
+- review-gate 실행 이력을 보는 로컬 monitor UI 제공
 
 ## 요구 사항
 
@@ -17,47 +27,42 @@ npm install -g @openai/codex
 codex login
 ```
 
-## 로컬 개발
+## 설치
 
-```bash
-npm install
-npm test
-agy plugin validate .
-agy plugin install .
-```
-
-## GitHub에서 설치
-
-Antigravity CLI 사용자는 GitHub 저장소에서 바로 설치할 수 있습니다.
+GitHub 저장소에서 바로 설치합니다.
 
 ```bash
 agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 ```
 
-이 저장소는 로컬 Antigravity 검증용 루트 `plugin.json`과 GitHub URL 설치용 `.claude-plugin/plugin.json`을 함께 포함합니다.
-
-기존 설치를 업데이트할 때는 hook 컴포넌트까지 manifest에 다시 등록되도록 재설치를 권장합니다.
+기존 설치를 깨끗하게 업데이트하려면 재설치합니다.
 
 ```bash
 agy plugin uninstall codex
 agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 ```
 
-`import_manifest.json`에 `hooks`가 들어갔는지 확인합니다.
-
-```bash
-cat ~/.gemini/antigravity-cli/import_manifest.json
-```
-
-설치 후 먼저 확인합니다.
+설치 상태 확인:
 
 ```text
 /codex:setup
 ```
 
-## Antigravity Slash Commands
+현재 workspace에 자동 review gate 켜기:
 
-플러그인을 설치한 뒤 아래 slash command를 기본 사용 경로로 씁니다.
+```text
+/codex:setup --enable-review-gate
+```
+
+끄기:
+
+```text
+/codex:setup --disable-review-gate
+```
+
+## 기본 사용
+
+기본 인터페이스는 slash command입니다.
 
 ```text
 /codex:setup
@@ -76,26 +81,102 @@ cat ~/.gemini/antigravity-cli/import_manifest.json
 /codex:monitor --status
 /codex:monitor --stop
 /codex:monitor --clear
+```
+
+참고:
+
+- 명령 파일은 `disable-model-invocation: true`를 사용합니다. 자연어 자동 라우팅보다 명시적인 `/codex:*` 명령 호출을 우선합니다.
+- `/codex:review`는 read-only이며 기본적으로 현재 uncommitted changes를 리뷰합니다.
+- `/codex:review --base <ref>`는 기준 ref와의 diff를 리뷰합니다.
+- `/codex:review`는 커스텀 focus text를 받지 않습니다. 특정 관점의 리뷰가 필요하면 `/codex:adversarial-review`를 사용합니다.
+- `review`, `adversarial-review`, `rescue`, `task`는 `--background`를 지원합니다.
+
+## Review Gate
+
+review gate는 Antigravity와 Codex를 다음 흐름으로 연결합니다.
+
+```text
+Antigravity 구현
+-> Antigravity가 멈추려 함
+-> Stop hook이 Codex read-only 리뷰 실행
+-> approve + allow: 종료 허용
+-> needs-attention + continue: Antigravity가 계속 수정
+```
+
+`/codex:setup --enable-review-gate`는 workspace 설정을 켜고 Antigravity CLI가 런타임에 읽는 active Stop hook을 아래 파일에 병합합니다.
+
+```text
+~/.gemini/config/hooks.json
+```
+
+커밋되는 plugin hook manifest인 `hooks/hooks.json`은 정적 파일로 유지되며 로컬 절대 경로를 포함하지 않습니다. 로컬 머신 경로는 사용자 환경의 active Antigravity hooks config에만 기록됩니다.
+
+명시적인 `/codex:*` command 세션은 자동 Stop-hook 리뷰를 건너뜁니다. 예를 들어 `/codex:monitor`, `/codex:setup`, `/codex:review`는 workspace에 변경사항이 남아 있어도 두 번째 자동 리뷰를 유발하지 않습니다.
+
+## Monitor
+
+로컬 review-gate monitor 실행:
+
+```text
+/codex:monitor
+```
+
+브라우저에서 엽니다.
+
+```text
+http://127.0.0.1:8765
+```
+
+유용한 monitor 명령:
+
+```text
+/codex:monitor --status
+/codex:monitor --stop
+/codex:monitor --clear
 /codex:monitor --foreground
 ```
 
-명령 파일은 `commands/` 아래에 있고 `disable-model-invocation: true`를 사용합니다. 따라서 자연어 자동 라우팅보다 명시적인 command 호출을 우선합니다.
+화면 해석:
 
-`/codex:review`는 읽기 전용이며 기본적으로 현재 uncommitted changes를 리뷰하고, `--base <ref>`를 주면 해당 기준 ref와의 diff를 리뷰합니다. 커스텀 focus text는 받지 않습니다. 특정 관점이나 더 비판적인 리뷰가 필요하면 `/codex:adversarial-review`를 사용합니다.
+- `Review Gate Runs`: 자동 Stop-hook 리뷰
+- `Codex Jobs`: `/codex:review`, `/codex:rescue`, `/codex:task` 같은 명시적 명령 작업
+- `approve / allow`: Codex 승인, Antigravity 종료 허용
+- `needs-attention / continue`: Codex가 수정 필요 항목을 발견, Antigravity가 계속 수정
+- `running / pending`: review-gate 실행 중
 
-`/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. workspace별 review-gate config를 켜고, Antigravity CLI가 런타임에 읽는 `~/.gemini/config/hooks.json`에 active Stop hook을 병합합니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
+## Doctor
 
-자동 Stop-hook 리뷰는 명시적인 `/codex:*` slash command 세션을 건너뜁니다. 따라서 `/codex:monitor`, `/codex:setup`, `/codex:review` 같은 명령은 workspace에 uncommitted change가 남아 있어도 두 번째 자동 리뷰를 다시 유발하지 않습니다.
+진단 실행:
 
-커밋되는 plugin hook manifest는 정적 파일로 유지되고 패키지용 npx command만 포함합니다. `setup --enable-review-gate`는 repo의 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다. 로컬 머신 경로는 사용자 전역 Antigravity hook 설정인 `~/.gemini/config/hooks.json`에만 기록됩니다.
+```text
+/codex:doctor
+/codex:doctor --run-hook-test
+```
 
-`/codex:monitor`는 review gate 실행 이력을 볼 수 있는 로컬 웹 UI를 `http://127.0.0.1:8765`에 띄웁니다. Stop hook은 시작/스킵/Codex 결과/최종 decision 이벤트를 로컬 Antigravity Codex 데이터 디렉터리에 저장하고, monitor는 Codex verdict, finding, raw event를 보여줍니다. 종료하려면 `/codex:monitor --stop`을 사용합니다. 기존 이벤트를 지우려면 `/codex:monitor --clear`를 사용합니다. 서버를 현재 터미널 프로세스에 붙여 실행하려면 `--foreground`를 사용합니다.
+`doctor`는 다음을 확인합니다.
 
-`/codex:doctor`는 로컬 설치 상태, hook manifest, workspace별 review-gate 설정, git 상태, 이벤트 로그 경로를 한 번에 진단합니다. `/codex:doctor --run-hook-test`는 Codex를 호출하지 않는 bypass 모드로 격리된 smoke test를 실행해 hook command와 이벤트 기록 경로가 정상인지 확인합니다.
+- Node 및 Codex CLI 사용 가능 여부
+- git workspace 상태
+- workspace review-gate 설정
+- 설치된 plugin hook manifest
+- `~/.gemini/config/hooks.json`의 active Stop hook
+- review-gate 이벤트 파일 경로
 
-## 자동 리뷰 문제 확인
+`--run-hook-test`는 bypass 모드로 hook 실행과 이벤트 기록 경로만 검증합니다. Codex를 호출하지 않습니다.
 
-이 플러그인 문제를 진단할 때는 WebSearch를 사용하지 않습니다. 기준 상태는 로컬 파일과 companion 출력입니다.
+## 문제 확인
+
+자동 리뷰가 실행되려면 아래 조건이 모두 맞아야 합니다.
+
+- 플러그인이 hook 지원과 함께 설치되어 있어야 합니다.
+- 현재 workspace에서 `/codex:setup --enable-review-gate`가 실행되어 있어야 합니다.
+- `~/.gemini/config/hooks.json`에 `codex-stop-review-gate`가 있어야 합니다.
+- workspace가 git 저장소여야 합니다.
+- staged, unstaged, untracked 변경사항 중 하나가 있어야 합니다.
+- Antigravity가 코드 수정 후 정상 Stop-hook 지점에 도달해야 합니다.
+- Codex CLI 인증과 quota가 정상이어야 합니다.
+
+로컬 상태 확인:
 
 ```bash
 agy plugin list
@@ -108,22 +189,11 @@ node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor --status --json
 ```
 
-자동 리뷰가 실행되려면 아래 조건이 모두 맞아야 합니다.
-
-- `import_manifest.json`의 `codex` 플러그인 components에 `hooks`가 포함되어야 합니다.
-- `/codex:setup --enable-review-gate`가 현재 workspace에 대해 켜져 있어야 합니다.
-- `~/.gemini/config/hooks.json`에 active `codex-stop-review-gate` Stop hook이 있어야 합니다.
-- workspace가 git 저장소이고 uncommitted change가 있어야 합니다.
-- Antigravity가 파일 수정 후 Stop hook 지점에 도달해야 합니다.
-- Codex CLI 인증과 quota가 정상이어야 합니다.
-
-`import_manifest.json`에 `hooks`가 없으면 `agy plugin uninstall codex` 후 `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`로 재설치합니다.
-
-monitor에 `Review Gate Runs`가 없으면 `/codex:monitor --status --json`이 출력하는 이벤트 파일 경로를 확인합니다. `events.jsonl`이 없으면 Stop hook이 아직 이벤트를 기록하지 않은 상태입니다. `Codex Jobs`와 `Review Gate Runs`는 별도입니다. `/codex:review` 같은 명시적 명령은 job으로 보이고, 자동 Stop-hook 리뷰는 review gate run으로 보입니다.
-
-`/codex:doctor --run-hook-test`가 성공하는데 `Review Gate Runs`가 계속 비어 있으면, 플러그인의 이벤트 기록과 monitor 읽기 경로는 정상입니다. 남은 문제는 해당 Antigravity 세션에서 자동 Stop hook이 호출되지 않는 것입니다. doctor가 active Stop hook 누락을 보고하면 `/codex:setup --enable-review-gate`를 다시 실행합니다.
+monitor에 `Review Gate Runs`가 없으면 Stop hook이 아직 이벤트를 기록하지 않은 상태입니다. `/codex:doctor --run-hook-test`는 통과하는데 자동 이벤트가 없다면 해당 세션에서 Antigravity가 Stop hook을 호출하지 않은 것입니다.
 
 ## Companion CLI
+
+Slash command는 내부적으로 companion CLI를 호출합니다. 직접 실행할 수도 있습니다.
 
 ```bash
 node dist/agy-codex.mjs setup
@@ -145,22 +215,13 @@ node dist/agy-codex.mjs monitor --clear
 node dist/agy-codex.mjs monitor --foreground
 ```
 
-`review`, `adversarial-review`, `rescue`, `task`에 `--background`를 붙이면 작업을 큐에 넣고 즉시 job id를 반환합니다.
+## 개발
 
-`review`는 positional prompt text를 의도적으로 거부합니다. 커스텀 리뷰 지시가 필요하면 `adversarial-review`를 사용합니다.
+직접 작성하는 소스는 `src/`와 `tests/` 아래 TypeScript로 관리합니다. `dist/`와 `hooks/bin/` 아래의 생성 파일은 Antigravity 설치 후 바로 실행될 수 있도록 커밋합니다.
 
-Antigravity 환경에서 스킬 브라우징이 필요한 경우를 위해 `skills/`도 유지하지만, 권장 워크플로우는 slash command입니다.
-
-## 제공 스킬
-
-- `codex-setup`: Codex CLI 설치 및 인증 준비 상태 확인
-- `codex-review`: 현재 git 워크스페이스에 대한 읽기 전용 Codex 리뷰 실행
-- `codex-adversarial-review`: 설계, 가정, 실패 모드, 테스트를 더 비판적으로 검토
-- `codex-rescue`: 조사 또는 구현 작업을 Codex에 위임
-- `codex-status`: 현재 워크스페이스의 최근 Codex 작업 상태 조회
-- `codex-result`: 완료된 Codex 작업 결과 출력
-- `codex-cancel`: 실행 중인 Codex 작업 취소
-- `codex-doctor`: 설치, hook, review gate, monitor 이벤트 경로 진단
-- `codex-monitor`: review gate 실행 이력을 보여주는 로컬 웹 UI 관리
-
-기본 task 실행은 읽기 전용입니다. 파일 수정을 허용하려면 명시적으로 `--write`를 사용합니다.
+```bash
+npm install
+npm test
+npm run validate
+agy plugin install .
+```

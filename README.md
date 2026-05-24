@@ -2,9 +2,19 @@
 
 한국어 문서: [README.ko.md](README.ko.md)
 
-Antigravity plugin that delegates code review and background engineering tasks to the local OpenAI Codex CLI.
+Antigravity Codex is an Antigravity plugin that connects Antigravity with the local OpenAI Codex CLI. It provides explicit `/codex:*` commands for review and task delegation, plus an optional review gate where Antigravity implements changes and Codex reviews them before Antigravity stops.
 
-Handwritten source lives in TypeScript under `src/` and `tests/`. The committed `dist/` files are generated runtime output for Antigravity plugin installs.
+## What It Does
+
+- Runs read-only Codex reviews from Antigravity.
+- Delegates engineering tasks to Codex through explicit commands.
+- Adds an optional Stop-hook review gate:
+  - Antigravity writes code.
+  - Antigravity reaches a stop point.
+  - Codex reviews the current git changes in read-only mode.
+  - `approve` lets Antigravity stop.
+  - `needs-attention` returns `continue`, so Antigravity keeps fixing the findings.
+- Provides a local monitor UI for review-gate runs at `http://127.0.0.1:8765`.
 
 ## Requirements
 
@@ -17,47 +27,42 @@ npm install -g @openai/codex
 codex login
 ```
 
-## Local Development
+## Install
 
-```bash
-npm install
-npm test
-agy plugin validate .
-agy plugin install .
-```
-
-## Install From GitHub
-
-For Antigravity CLI users, install directly from the GitHub repository:
+Install directly from GitHub:
 
 ```bash
 agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 ```
 
-The repository includes both root `plugin.json` for local Antigravity validation and `.claude-plugin/plugin.json` for GitHub URL installation.
-
-When updating an existing install, prefer a clean reinstall so Antigravity records all plugin components, including hooks:
+For a clean update, reinstall the plugin:
 
 ```bash
 agy plugin uninstall codex
 agy plugin install https://github.com/zjxps2007/antigravity-codex.git
 ```
 
-Verify that the import manifest contains `hooks`:
-
-```bash
-cat ~/.gemini/antigravity-cli/import_manifest.json
-```
-
-Then run:
+Check setup:
 
 ```text
 /codex:setup
 ```
 
-## Antigravity Slash Commands
+Enable the automatic review gate for the current workspace:
 
-Install the plugin, then use the slash commands as the primary interface:
+```text
+/codex:setup --enable-review-gate
+```
+
+Disable it later:
+
+```text
+/codex:setup --disable-review-gate
+```
+
+## Daily Use
+
+Use slash commands as the primary interface.
 
 ```text
 /codex:setup
@@ -76,26 +81,102 @@ Install the plugin, then use the slash commands as the primary interface:
 /codex:monitor --status
 /codex:monitor --stop
 /codex:monitor --clear
+```
+
+Notes:
+
+- Commands are explicit command routes. The command files use `disable-model-invocation: true`, so normal natural-language prompts are not routed into Codex automatically.
+- `/codex:review` is read-only. It reviews current uncommitted changes by default.
+- `/codex:review --base <ref>` reviews the diff against a base ref.
+- `/codex:review` does not accept custom focus text. Use `/codex:adversarial-review` for focused or skeptical review instructions.
+- `review`, `adversarial-review`, `rescue`, and `task` support `--background`.
+
+## Review Gate
+
+The review gate is the main Antigravity-to-Codex workflow:
+
+```text
+Antigravity implements
+-> Antigravity tries to stop
+-> Stop hook runs Codex read-only review
+-> approve + allow: stop is allowed
+-> needs-attention + continue: Antigravity keeps fixing
+```
+
+`/codex:setup --enable-review-gate` updates the workspace config and installs the active Stop hook into:
+
+```text
+~/.gemini/config/hooks.json
+```
+
+The committed plugin hook manifest stays static in `hooks/hooks.json` and does not contain local absolute paths. Local machine paths are written only to the user's active Antigravity hooks config.
+
+Explicit `/codex:*` command sessions are skipped by the automatic Stop-hook review. For example, `/codex:monitor`, `/codex:setup`, and `/codex:review` do not trigger a second review just because the workspace has uncommitted changes.
+
+## Monitor
+
+Start the local review-gate monitor:
+
+```text
+/codex:monitor
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765
+```
+
+Useful monitor commands:
+
+```text
+/codex:monitor --status
+/codex:monitor --stop
+/codex:monitor --clear
 /codex:monitor --foreground
 ```
 
-The command files live under `commands/` and use `disable-model-invocation: true`, so they are intended for explicit command invocation rather than natural-language auto-routing.
+Monitor sections:
 
-`/codex:review` is read-only and reviews the current uncommitted changes by default, or a branch diff when `--base <ref>` is provided. It does not accept custom focus text; use `/codex:adversarial-review` when you want focused or skeptical review instructions.
+- `Review Gate Runs`: automatic Stop-hook reviews.
+- `Codex Jobs`: explicit command jobs such as `/codex:review`, `/codex:rescue`, or `/codex:task`.
+- `approve / allow`: Codex approved and Antigravity may stop.
+- `needs-attention / continue`: Codex found actionable findings and Antigravity should continue.
+- `running / pending`: a review-gate run is still in progress.
 
-`/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. It updates the workspace review-gate config and merges the active Stop hook into `~/.gemini/config/hooks.json`, which is the hooks file Antigravity CLI loads at runtime. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
+## Doctor
 
-The automatic Stop-hook review skips explicit `/codex:*` slash-command sessions, so commands such as `/codex:monitor`, `/codex:setup`, and `/codex:review` do not trigger a second review just because the workspace already has uncommitted changes.
+Run diagnostics:
 
-The committed plugin hook manifest is static and stays packaged with its npx command. `setup --enable-review-gate` does not write local absolute paths into the repo's `hooks/hooks.json`; local machine paths are written only to the user's active Antigravity hooks config under `~/.gemini/config/hooks.json`.
+```text
+/codex:doctor
+/codex:doctor --run-hook-test
+```
 
-`/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
+`doctor` checks:
 
-`/codex:doctor` diagnoses the local install, hook manifest, workspace review-gate config, git state, and event log path. Use `/codex:doctor --run-hook-test` to run an isolated bypass-mode smoke test that verifies the hook command and event writer without invoking Codex.
+- Node and Codex CLI availability
+- git workspace state
+- workspace review-gate config
+- installed plugin hook manifest
+- active Stop hook in `~/.gemini/config/hooks.json`
+- review-gate event path
 
-## Automatic Review Troubleshooting
+`--run-hook-test` verifies hook execution and event writing in bypass mode. It does not call Codex.
 
-Do not use web search to diagnose this plugin. The authoritative state is local:
+## Troubleshooting
+
+Automatic review runs only when all of these are true:
+
+- The plugin is installed with hook support.
+- `/codex:setup --enable-review-gate` is enabled for the current workspace.
+- `~/.gemini/config/hooks.json` contains `codex-stop-review-gate`.
+- The workspace is a git repository.
+- There are staged, unstaged, or untracked changes.
+- Antigravity reaches a normal Stop-hook point after editing.
+- Codex CLI is authenticated and has quota available.
+
+Useful local checks:
 
 ```bash
 agy plugin list
@@ -108,22 +189,11 @@ node dist/agy-codex.mjs doctor --run-hook-test
 node dist/agy-codex.mjs monitor --status --json
 ```
 
-For automatic review to run, all of the following must be true:
-
-- `import_manifest.json` lists `hooks` for the `codex` plugin.
-- `/codex:setup --enable-review-gate` has enabled the current workspace.
-- `~/.gemini/config/hooks.json` contains the active `codex-stop-review-gate` Stop hook.
-- The workspace is a git repository and has uncommitted changes.
-- Antigravity reaches a Stop hook point after editing.
-- The Codex CLI is authenticated and has quota available.
-
-If `hooks` is missing from `import_manifest.json`, reinstall with `agy plugin uninstall codex` followed by `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`.
-
-If the monitor shows no `Review Gate Runs`, manually check the event file path reported by `/codex:monitor --status --json`. A missing `events.jsonl` means the Stop hook has not recorded any event yet. `Codex Jobs` are separate from `Review Gate Runs`: explicit commands such as `/codex:review` appear as jobs, while automatic Stop-hook reviews appear as review gate runs.
-
-If `/codex:doctor --run-hook-test` passes but `Review Gate Runs` remains empty, the plugin can write events and the monitor can read them; the missing piece is Antigravity invoking the automatic Stop hook for that session. Run `/codex:setup --enable-review-gate` again if doctor reports that the active Stop hook is missing.
+If the monitor has no `Review Gate Runs`, the Stop hook has not recorded an event yet. If `/codex:doctor --run-hook-test` passes but no automatic events appear, Antigravity has not invoked the Stop hook for that session.
 
 ## Companion CLI
+
+The slash commands call the companion CLI under the hood. You can also run it directly:
 
 ```bash
 node dist/agy-codex.mjs setup
@@ -145,8 +215,13 @@ node dist/agy-codex.mjs monitor --clear
 node dist/agy-codex.mjs monitor --foreground
 ```
 
-Use `--background` on `review`, `adversarial-review`, `rescue`, or `task` to queue work and return immediately.
+## Development
 
-`review` intentionally rejects positional prompt text. Use `adversarial-review` for custom review guidance.
+Handwritten source lives in TypeScript under `src/` and `tests/`. Generated runtime files under `dist/` and `hooks/bin/` are committed so Antigravity can run the plugin immediately after install.
 
-Skills are still included as a fallback integration surface for Antigravity environments that browse skills, but slash commands are the preferred workflow.
+```bash
+npm install
+npm test
+npm run validate
+agy plugin install .
+```
