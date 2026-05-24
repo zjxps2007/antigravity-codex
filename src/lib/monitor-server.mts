@@ -286,7 +286,72 @@ function powershellQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-function startWindowsMonitorProcess(scriptPath: string, host: string, port: number): number | null {
+function windowsCommandLineArg(value: string): string {
+  if (value.length > 0 && !/[\s"]/.test(value)) {
+    return value;
+  }
+  let result = '"';
+  let backslashes = 0;
+  for (const char of value) {
+    if (char === "\\") {
+      backslashes += 1;
+      continue;
+    }
+    if (char === '"') {
+      result += "\\".repeat(backslashes * 2 + 1);
+      result += '"';
+      backslashes = 0;
+      continue;
+    }
+    result += "\\".repeat(backslashes);
+    result += char;
+    backslashes = 0;
+  }
+  result += "\\".repeat(backslashes * 2);
+  result += '"';
+  return result;
+}
+
+function monitorCommandLine(scriptPath: string, host: string, port: number): string {
+  return [
+    process.execPath,
+    scriptPath,
+    "monitor-server",
+    "--host",
+    host,
+    "--port",
+    String(port)
+  ].map(windowsCommandLineArg).join(" ");
+}
+
+function startWindowsMonitorWithCim(scriptPath: string, host: string, port: number): number | null {
+  const commandLine = monitorCommandLine(scriptPath, host, port);
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    `$arguments = @{ CommandLine = ${powershellQuote(commandLine)}; CurrentDirectory = ${powershellQuote(process.cwd())} }`,
+    "$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments $arguments",
+    "if ($result.ReturnValue -ne 0) { throw \"Win32_Process.Create failed with code $($result.ReturnValue)\" }",
+    "[Console]::Out.Write($result.ProcessId)"
+  ].join("; ");
+  const encoded = Buffer.from(command, "utf16le").toString("base64");
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      windowsHide: true,
+      env: process.env
+    }
+  );
+  if (result.status !== 0) {
+    throw new Error(result.stderr?.trim() || result.error?.message || "Failed to start monitor with Win32_Process.Create.");
+  }
+  const pid = Number(result.stdout.trim());
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function startWindowsMonitorWithStartProcess(scriptPath: string, host: string, port: number): number | null {
   const command = [
     "$ErrorActionPreference = 'Stop'",
     `$process = Start-Process -FilePath ${powershellQuote(process.execPath)} -ArgumentList @(${[
@@ -315,6 +380,17 @@ function startWindowsMonitorProcess(scriptPath: string, host: string, port: numb
   }
   const pid = Number(result.stdout.trim());
   return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function startWindowsMonitorProcess(scriptPath: string, host: string, port: number): number | null {
+  try {
+    return startWindowsMonitorWithCim(scriptPath, host, port);
+  } catch (error) {
+    process.stderr.write(
+      `Win32_Process.Create monitor launch failed; falling back to Start-Process: ${error instanceof Error ? error.message : String(error)}\n`
+    );
+    return startWindowsMonitorWithStartProcess(scriptPath, host, port);
+  }
 }
 
 function startDetachedMonitorProcess(scriptPath: string, host: string, port: number): number | null {
