@@ -136,6 +136,14 @@ http://127.0.0.1:8765
 /codex:monitor --foreground
 ```
 
+기본 monitor는 `127.0.0.1`에 바인딩되므로 같은 PC에서만 보입니다. 같은 신뢰된 네트워크의 다른 PC에서 보려면 monitor를 아래처럼 실행합니다.
+
+```text
+/codex:monitor --host 0.0.0.0 --port 8765
+```
+
+다른 PC에서는 `http://<monitor 실행 PC의 IP>:8765`로 접속합니다. monitor에는 인증이 없으므로 신뢰할 수 없는 네트워크에 노출하지 마세요.
+
 화면 해석:
 
 - `Review Gate Runs`: 자동 Stop-hook 리뷰

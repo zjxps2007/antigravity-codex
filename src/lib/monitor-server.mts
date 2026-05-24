@@ -22,6 +22,7 @@ const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 8765;
 const MAX_LOG_TAIL_BYTES = 24_000;
 const ROOT_DIR = resolveRuntimeRoot(path.dirname(fileURLToPath(import.meta.url)));
+const MONITOR_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "0.0.0.0", "::"]);
 
 interface MonitorJob {
   id: string;
@@ -42,8 +43,8 @@ interface MonitorJob {
 
 export function normalizeMonitorHost(value: string | undefined): string {
   const host = value?.trim() || DEFAULT_MONITOR_HOST;
-  if (!["127.0.0.1", "localhost", "::1"].includes(host)) {
-    throw new Error("Monitor host must be local: 127.0.0.1, localhost, or ::1.");
+  if (!MONITOR_HOSTS.has(host)) {
+    throw new Error("Monitor host must be one of: 127.0.0.1, localhost, ::1, 0.0.0.0, ::.");
   }
   return host;
 }
@@ -281,6 +282,56 @@ export function stopMonitorProcess(pid: number): void {
   }
 }
 
+function powershellQuote(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function startWindowsMonitorProcess(scriptPath: string, host: string, port: number): number | null {
+  const command = [
+    "$ErrorActionPreference = 'Stop'",
+    `$process = Start-Process -FilePath ${powershellQuote(process.execPath)} -ArgumentList @(${[
+      scriptPath,
+      "monitor-server",
+      "--host",
+      host,
+      "--port",
+      String(port)
+    ].map(powershellQuote).join(", ")}) -WorkingDirectory ${powershellQuote(process.cwd())} -WindowStyle Hidden -PassThru`,
+    "[Console]::Out.Write($process.Id)"
+  ].join("; ");
+  const encoded = Buffer.from(command, "utf16le").toString("base64");
+  const result = spawnSync(
+    "powershell.exe",
+    ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded],
+    {
+      cwd: process.cwd(),
+      encoding: "utf8",
+      windowsHide: true,
+      env: process.env
+    }
+  );
+  if (result.status !== 0) {
+    throw new Error(result.stderr?.trim() || result.error?.message || "Failed to start monitor with PowerShell.");
+  }
+  const pid = Number(result.stdout.trim());
+  return Number.isInteger(pid) && pid > 0 ? pid : null;
+}
+
+function startDetachedMonitorProcess(scriptPath: string, host: string, port: number): number | null {
+  if (process.platform === "win32") {
+    return startWindowsMonitorProcess(scriptPath, host, port);
+  }
+  const child = spawn(process.execPath, [scriptPath, "monitor-server", "--host", host, "--port", String(port)], {
+    cwd: process.cwd(),
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+    env: process.env
+  });
+  child.unref();
+  return child.pid ?? null;
+}
+
 export async function handleMonitor(
   argv: string[],
   scriptPath: string,
@@ -331,20 +382,13 @@ export async function handleMonitor(
     return;
   }
 
-  const child = spawn(process.execPath, [scriptPath, "monitor-server", "--host", host, "--port", String(port)], {
-    cwd: process.cwd(),
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-    env: process.env
-  });
-  child.unref();
-  if (!child.pid) {
+  const pid = startDetachedMonitorProcess(scriptPath, host, port);
+  if (!pid) {
     throw new Error("Failed to start Codex monitor.");
   }
 
   const state: MonitorState = {
-    pid: child.pid,
+    pid,
     host,
     port,
     url: monitorUrl(host, port),
@@ -352,7 +396,7 @@ export async function handleMonitor(
   };
   writeMonitorState(state);
   if (!(await waitForMonitor(state))) {
-    stopMonitorProcess(child.pid);
+    stopMonitorProcess(pid);
     clearMonitorState();
     throw new Error(`Codex monitor did not become reachable at ${state.url}.`);
   }

@@ -136,6 +136,14 @@ Useful monitor commands:
 /codex:monitor --foreground
 ```
 
+By default, the monitor binds to `127.0.0.1` and is visible only on the same machine. To view it from another trusted PC on the same network, start it with:
+
+```text
+/codex:monitor --host 0.0.0.0 --port 8765
+```
+
+Then open `http://<monitor-machine-ip>:8765` from the other PC. The monitor has no authentication, so do not expose it to untrusted networks.
+
 Monitor sections:
 
 - `Review Gate Runs`: automatic Stop-hook reviews.

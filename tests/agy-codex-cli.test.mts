@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { normalizeMonitorHost } from "../dist/lib/monitor-server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const companion = path.join(repoRoot, "dist", "agy-codex.mjs");
@@ -68,6 +69,13 @@ test("monitor status reports stopped without a running server", () => {
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout) as { running: boolean };
   assert.equal(payload.running, false);
+});
+
+test("monitor host accepts loopback and wildcard bindings", () => {
+  assert.equal(normalizeMonitorHost(undefined), "127.0.0.1");
+  assert.equal(normalizeMonitorHost("127.0.0.1"), "127.0.0.1");
+  assert.equal(normalizeMonitorHost("0.0.0.0"), "0.0.0.0");
+  assert.throws(() => normalizeMonitorHost("example.com"), /Monitor host/);
 });
 
 test("monitor clear removes stored review gate events", () => {
