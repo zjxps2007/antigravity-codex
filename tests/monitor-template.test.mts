@@ -279,3 +279,80 @@ test("monitor template uses needs-attention class on continue cards", async () =
   const output = elements.get("runs")?.innerHTML ?? "";
   assert.match(output, /class="run continue needs-attention"/);
 });
+
+test("monitor template handles collapsible runs and default collapsed state", async () => {
+  const elements = new Map<string, FakeElement>();
+  for (const id of [
+    "runs",
+    "jobs",
+    "updated",
+    "events-file",
+    "run-count",
+    "job-count",
+    "diagnostics",
+    "auto-refresh",
+    "refresh",
+    "clear",
+    "stop"
+  ]) {
+    createFakeElement(elements, id);
+  }
+
+  const events = [
+    {
+      id: "run-first",
+      workspace: "/tmp/workspace",
+      time: "2026-05-23T08:00:01.000Z",
+      type: "decision",
+      decision: "allow",
+      verdict: "approve",
+      summary: "First run is expanded."
+    },
+    {
+      id: "run-second",
+      workspace: "/tmp/workspace",
+      time: "2026-05-23T08:00:00.000Z",
+      type: "decision",
+      decision: "allow",
+      verdict: "approve",
+      summary: "Second run is collapsed."
+    }
+  ];
+
+  const context = vm.createContext({
+    document: {
+      getElementById: (id: string) => elements.get(id) ?? createFakeElement(elements, id)
+    },
+    fetch: async () => ({
+      json: async () => ({
+        events,
+        jobs: [],
+        diagnostics: {},
+        eventsFile: "/tmp/events.jsonl"
+      })
+    }),
+    Date,
+    Map,
+    Number,
+    String,
+    JSON,
+    setInterval,
+    clearInterval,
+    confirm: () => false,
+    navigator: { clipboard: { writeText: () => undefined } },
+    localStorage: {
+      getItem: () => null,
+      setItem: () => undefined
+    },
+    console
+  });
+
+  vm.runInContext(extractScript(renderMonitorHtml()), context, { timeout: 5000 });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const output = elements.get("runs")?.innerHTML ?? "";
+  // The first run should NOT have run-collapsed
+  assert.match(output, /id="run-run-first" class="run allow approve"/);
+  // The second run should have run-collapsed
+  assert.match(output, /id="run-run-second" class="run allow approve run-collapsed"/);
+});

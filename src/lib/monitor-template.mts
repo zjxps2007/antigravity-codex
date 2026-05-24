@@ -544,6 +544,37 @@ export function renderMonitorHtml(): string {
       border-bottom: 1px solid var(--panel-border);
       padding-bottom: 16px;
       margin-bottom: 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .run-head:hover .run-title {
+      color: var(--text) !important;
+    }
+
+    .run-head:hover .run-chevron {
+      color: var(--text) !important;
+    }
+
+    .run-chevron {
+      color: var(--text-muted);
+      transition: transform 0.2s ease, color 0.2s ease;
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+
+    .run.run-collapsed > *:not(.run-head) {
+      display: none !important;
+    }
+
+    .run.run-collapsed .run-head {
+      border-bottom-color: transparent;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+
+    .run.run-collapsed .run-chevron {
+      transform: rotate(-90deg);
     }
 
     .run-title {
@@ -1346,7 +1377,7 @@ export function renderMonitorHtml(): string {
       \`;
     }
 
-    function renderRun(run) {
+    function renderRun(run, isFirst) {
       const started = pick(run.items, 'started');
       const result = pick(run.items, 'codex-result');
       const decision = pick(run.items, 'decision');
@@ -1355,7 +1386,10 @@ export function renderMonitorHtml(): string {
       const summary = (decision && decision.summary) || (result && result.summary) || (started && started.message) || '';
       const findings = (decision && decision.findings) || (result && result.findings) || [];
       const raw = { id: run.id, events: run.items };
-      const runClasses = ['run', status, verdict].filter(Boolean).map(h).join(' ');
+
+      const collapsedState = safeGetItem('run-collapsed-' + run.id);
+      const isCollapsed = collapsedState !== null ? collapsedState === 'true' : !isFirst;
+      const runClasses = ['run', status, verdict, isCollapsed ? 'run-collapsed' : ''].filter(Boolean).map(h).join(' ');
 
       const statusIcon = ICONS[status] || '';
       const verdictIcon = ICONS[verdict] || '';
@@ -1366,16 +1400,19 @@ export function renderMonitorHtml(): string {
       }
 
       return \`
-        <article class="\${runClasses}">
-          <div class="run-head">
-            <div>
+        <article id="run-\${run.id}" class="\${runClasses}">
+          <div class="run-head" onclick="window.toggleRunCollapse('\${run.id}')" title="Click to expand/collapse">
+            <div style="flex: 1; min-width: 0;">
               <div class="run-title">\${h(started && started.workspace || 'Workspace review')}</div>
               <div class="badge-group">
                 <span class="badge \${h(status)}">\${statusIcon}\${h(status)}</span>
                 <span class="badge \${h(verdict)}">\${verdictIcon}\${h(verdict)}</span>
               </div>
             </div>
-            <div class="run-time">\${h(new Date(run.last.time || Date.now()).toLocaleString())}</div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="run-time">\${h(new Date(run.last.time || Date.now()).toLocaleString())}</div>
+              <svg class="run-chevron" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </div>
           </div>
           \${summaryHtml}
           \${renderTimeline(run.items)}
@@ -1449,7 +1486,7 @@ export function renderMonitorHtml(): string {
         jobCountEl.textContent = String(jobs.length);
         diagnosticsEl.innerHTML = renderDiagnostics(data.diagnostics);
         jobsEl.innerHTML = jobs.length ? jobs.map(renderJob).join('') : '<div class="empty">No Codex jobs found for this workspace.</div>';
-        runsEl.innerHTML = runs.length ? runs.map(renderRun).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
+        runsEl.innerHTML = runs.length ? runs.map((run, index) => renderRun(run, index === 0)).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
       } finally {
         loading = false;
       }
@@ -1525,6 +1562,19 @@ export function renderMonitorHtml(): string {
     globalObj.toggleSidebarFromInner = function() {
       const currentCollapsed = layoutContainer.classList.contains('sidebar-collapsed');
       setSidebarCollapsed(!currentCollapsed);
+    };
+
+    globalObj.toggleRunCollapse = function(runId) {
+      const runEl = document.getElementById('run-' + runId);
+      if (!runEl) return;
+      const isCollapsed = runEl.classList.contains('run-collapsed');
+      if (isCollapsed) {
+        runEl.classList.remove('run-collapsed');
+        safeSetItem('run-collapsed-' + runId, 'false');
+      } else {
+        runEl.classList.add('run-collapsed');
+        safeSetItem('run-collapsed-' + runId, 'true');
+      }
     };
 
     function initDiagnosticsCollapse() {
