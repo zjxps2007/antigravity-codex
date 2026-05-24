@@ -85,6 +85,8 @@ cat ~/.gemini/antigravity-cli/import_manifest.json
 
 `/codex:setup --enable-review-gate`는 Antigravity가 코드 수정 후 멈추려 할 때 read-only Codex 리뷰를 실행하는 Stop hook을 켭니다. workspace별 review-gate config를 켜고, Antigravity CLI가 런타임에 읽는 `~/.gemini/config/hooks.json`에 active Stop hook을 병합합니다. Codex가 조치할 만한 문제를 반환하면 hook이 Antigravity에게 계속 수정하라고 요청합니다. 끄려면 `/codex:setup --disable-review-gate`를 사용합니다.
 
+자동 Stop-hook 리뷰는 명시적인 `/codex:*` slash command 세션을 건너뜁니다. 따라서 `/codex:monitor`, `/codex:setup`, `/codex:review` 같은 명령은 workspace에 uncommitted change가 남아 있어도 두 번째 자동 리뷰를 다시 유발하지 않습니다.
+
 커밋되는 plugin hook manifest는 정적 파일로 유지되고 패키지용 npx command만 포함합니다. `setup --enable-review-gate`는 repo의 `hooks/hooks.json`에 로컬 절대경로를 쓰지 않습니다. 로컬 머신 경로는 사용자 전역 Antigravity hook 설정인 `~/.gemini/config/hooks.json`에만 기록됩니다.
 
 `/codex:monitor`는 review gate 실행 이력을 볼 수 있는 로컬 웹 UI를 `http://127.0.0.1:8765`에 띄웁니다. Stop hook은 시작/스킵/Codex 결과/최종 decision 이벤트를 로컬 Antigravity Codex 데이터 디렉터리에 저장하고, monitor는 Codex verdict, finding, raw event를 보여줍니다. 종료하려면 `/codex:monitor --stop`을 사용합니다. 기존 이벤트를 지우려면 `/codex:monitor --clear`를 사용합니다. 서버를 현재 터미널 프로세스에 붙여 실행하려면 `--foreground`를 사용합니다.

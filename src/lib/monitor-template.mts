@@ -20,29 +20,29 @@ export function renderMonitorHtml(): string {
       --text: #f3f4f6;
       --text-muted: #9ca3af;
       --ink: #ffffff;
-      
+
       /* Vibrant Tailored HSL Colors */
       --indigo: 250, 89%, 65%;
       --indigo-glow: rgba(99, 102, 241, 0.15);
-      
+
       --success: 142, 70%, 45%;
       --success-glow: rgba(16, 185, 129, 0.12);
-      
+
       --danger: 350, 80%, 55%;
       --danger-glow: rgba(239, 68, 68, 0.12);
-      
+
       --warning: 38, 92%, 50%;
       --warning-glow: rgba(245, 158, 11, 0.12);
-      
+
       --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
       --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
-    
+
     * {
       box-sizing: border-box;
       transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     }
-    
+
     body {
       margin: 0;
       background: radial-gradient(circle at 50% 0%, #111827, #030712);
@@ -80,7 +80,7 @@ export function renderMonitorHtml(): string {
       z-index: -1;
       pointer-events: none;
     }
-    
+
     header {
       border-bottom: 1px solid var(--panel-border);
       background: rgba(3, 7, 18, 0.7);
@@ -89,12 +89,12 @@ export function renderMonitorHtml(): string {
       top: 0;
       z-index: 100;
     }
-    
+
     .wrap {
       width: min(1200px, calc(100vw - 32px));
       margin: 0 auto;
     }
-    
+
     .top {
       min-height: 80px;
       display: flex;
@@ -102,7 +102,7 @@ export function renderMonitorHtml(): string {
       justify-content: space-between;
       gap: 16px;
     }
-    
+
     .logo-container {
       display: flex;
       align-items: center;
@@ -145,7 +145,7 @@ export function renderMonitorHtml(): string {
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.025em;
     }
-    
+
     .sub {
       margin-top: 2px;
       color: var(--text-muted);
@@ -181,14 +181,14 @@ export function renderMonitorHtml(): string {
       0% { transform: scale(0.5); opacity: 1; }
       80%, 100% { transform: scale(1.8); opacity: 0; }
     }
-    
+
     .actions {
       display: flex;
       align-items: center;
       gap: 12px;
       flex-wrap: wrap;
     }
-    
+
     button {
       height: 40px;
       border: 1px solid var(--panel-border);
@@ -205,14 +205,14 @@ export function renderMonitorHtml(): string {
       gap: 8px;
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
-    
+
     button:hover {
       background: rgba(255, 255, 255, 0.08);
       border-color: rgba(255, 255, 255, 0.15);
       transform: translateY(-2px);
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     }
-    
+
     button:active {
       transform: translateY(-1px);
     }
@@ -227,7 +227,7 @@ export function renderMonitorHtml(): string {
     button:hover svg {
       color: var(--text);
     }
-    
+
     button.primary {
       background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
       border-color: rgba(99, 102, 241, 0.5);
@@ -263,7 +263,7 @@ export function renderMonitorHtml(): string {
     button.toggle.active svg {
       color: #86efac;
     }
-    
+
     button.danger {
       color: #fca5a5;
       border-color: rgba(239, 68, 68, 0.2);
@@ -281,18 +281,18 @@ export function renderMonitorHtml(): string {
     button.danger:hover svg {
       color: #ffffff;
     }
-    
+
     main {
       padding: 32px 0 64px;
     }
-    
+
     .meta {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 20px;
       margin-bottom: 32px;
     }
-    
+
     .metric {
       border: 1px solid var(--panel-border);
       border-radius: 16px;
@@ -316,7 +316,7 @@ export function renderMonitorHtml(): string {
       height: 100%;
       background: linear-gradient(180deg, #6366f1, #4f46e5);
     }
-    
+
     .metric.runs-count::before {
       background: linear-gradient(180deg, #10b981, #059669);
     }
@@ -324,7 +324,7 @@ export function renderMonitorHtml(): string {
     .metric.jobs-count::before {
       background: linear-gradient(180deg, #38bdf8, #2563eb);
     }
-    
+
     .metric b {
       display: block;
       margin-bottom: 8px;
@@ -334,7 +334,7 @@ export function renderMonitorHtml(): string {
       color: var(--text-muted);
       font-weight: 700;
     }
-    
+
     .metric span {
       font-size: 15px;
       font-weight: 600;
@@ -365,8 +365,29 @@ export function renderMonitorHtml(): string {
       background: var(--panel);
       backdrop-filter: blur(20px) saturate(180%);
       padding: 20px;
-      margin-bottom: 28px;
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
+    }
+
+    .diagnostics-content {
+      max-height: 1000px;
+      overflow: hidden;
+      transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+      opacity: 1;
+    }
+
+    .diagnostics.diagnostics-collapsed .diagnostics-content {
+      max-height: 0px !important;
+      opacity: 0 !important;
+      overflow: hidden;
+    }
+
+    .diagnostics.diagnostics-collapsed #diagnostics-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .diagnostics.diagnostics-collapsed .diagnostics-head {
+      border-bottom-color: transparent;
+      padding-bottom: 0;
     }
 
     .diagnostics-head {
@@ -376,7 +397,6 @@ export function renderMonitorHtml(): string {
       align-items: flex-start;
       padding-bottom: 14px;
       border-bottom: 1px solid var(--panel-border);
-      margin-bottom: 14px;
     }
 
     .diagnostics-title {
@@ -394,7 +414,7 @@ export function renderMonitorHtml(): string {
 
     .diagnostics-grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: 1fr;
       gap: 8px;
     }
 
@@ -444,12 +464,12 @@ export function renderMonitorHtml(): string {
       color: #cbd5e1;
       border: 1px solid rgba(148, 163, 184, 0.18);
     }
-    
+
     .runs {
       display: grid;
       gap: 20px;
     }
-    
+
     .run {
       border: 1px solid var(--panel-border);
       border-radius: 16px;
@@ -465,7 +485,7 @@ export function renderMonitorHtml(): string {
       from { opacity: 0; transform: translateY(16px); }
       to { opacity: 1; transform: translateY(0); }
     }
-    
+
     .run::before {
       content: '';
       position: absolute;
@@ -484,31 +504,38 @@ export function renderMonitorHtml(): string {
       transform: translateY(-3px);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(99, 102, 241, 0.1);
     }
-    
-    .run.allow::before { 
+
+    .run.allow::before {
       background: rgb(16, 185, 129);
     }
     .run.allow:hover {
       border-color: rgba(16, 185, 129, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.08);
     }
-    
-    .run.continue::before { 
+
+    .run.continue::before {
       background: rgb(239, 68, 68);
     }
     .run.continue:hover {
       border-color: rgba(239, 68, 68, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.08);
     }
-    
-    .run.running::before { 
+    .run.needs-attention::before {
+      background: rgb(56, 189, 248);
+    }
+    .run.needs-attention:hover {
+      border-color: rgba(56, 189, 248, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(56, 189, 248, 0.08);
+    }
+
+    .run.running::before {
       background: rgb(245, 158, 11);
     }
     .run.running:hover {
       border-color: rgba(245, 158, 11, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.08);
     }
-    
+
     .run-head {
       display: flex;
       justify-content: space-between;
@@ -518,14 +545,14 @@ export function renderMonitorHtml(): string {
       padding-bottom: 16px;
       margin-bottom: 16px;
     }
-    
+
     .run-title {
       font-size: 17px;
       font-weight: 700;
       color: var(--ink);
       letter-spacing: -0.015em;
     }
-    
+
     .run-time {
       color: var(--text-muted);
       font-size: 12px;
@@ -536,14 +563,14 @@ export function renderMonitorHtml(): string {
       border-radius: 6px;
       border: 1px solid var(--panel-border);
     }
-    
+
     .badge-group {
       display: flex;
       gap: 8px;
       margin-top: 8px;
       flex-wrap: wrap;
     }
-    
+
     .badge {
       display: inline-flex;
       align-items: center;
@@ -559,31 +586,31 @@ export function renderMonitorHtml(): string {
       border: 1px solid rgba(255, 255, 255, 0.05);
       gap: 6px;
     }
-    
-    .badge.allow { 
-      background: rgba(16, 185, 129, 0.1); 
-      color: #34d399; 
-      border: 1px solid rgba(16, 185, 129, 0.2); 
+
+    .badge.allow {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
     }
-    .badge.continue { 
-      background: rgba(239, 68, 68, 0.1); 
-      color: #fca5a5; 
-      border: 1px solid rgba(239, 68, 68, 0.2); 
+    .badge.continue {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.2);
     }
-    .badge.running { 
-      background: rgba(245, 158, 11, 0.1); 
-      color: #fbbf24; 
-      border: 1px solid rgba(245, 158, 11, 0.2); 
+    .badge.running {
+      background: rgba(245, 158, 11, 0.1);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.2);
     }
-    .badge.needs-attention { 
-      background: rgba(239, 68, 68, 0.1); 
-      color: #fca5a5; 
-      border: 1px solid rgba(239, 68, 68, 0.2); 
+    .badge.needs-attention {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38bdf8;
+      border: 1px solid rgba(56, 189, 248, 0.2);
     }
-    .badge.approve { 
-      background: rgba(16, 185, 129, 0.1); 
-      color: #34d399; 
-      border: 1px solid rgba(16, 185, 129, 0.2); 
+    .badge.approve {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
     }
     .badge.completed {
       background: rgba(16, 185, 129, 0.1);
@@ -601,7 +628,7 @@ export function renderMonitorHtml(): string {
       width: 12px;
       height: 12px;
     }
-    
+
     .summary {
       margin: 16px 0;
       color: var(--text);
@@ -618,6 +645,9 @@ export function renderMonitorHtml(): string {
     }
     .run.continue .summary {
       border-left-color: rgba(239, 68, 68, 0.4);
+    }
+    .run.needs-attention .summary {
+      border-left-color: rgba(56, 189, 248, 0.4);
     }
     .run.running .summary {
       border-left-color: rgba(245, 158, 11, 0.4);
@@ -721,7 +751,7 @@ export function renderMonitorHtml(): string {
       text-transform: uppercase;
       letter-spacing: 0.08em;
     }
-    
+
     .findings-container {
       margin-top: 20px;
     }
@@ -746,7 +776,7 @@ export function renderMonitorHtml(): string {
       padding: 16px;
       border: 1px solid rgba(255, 255, 255, 0.03);
     }
-    
+
     .finding {
       position: relative;
       padding: 12px 14px 12px 28px;
@@ -754,7 +784,7 @@ export function renderMonitorHtml(): string {
       background: rgba(255, 255, 255, 0.01);
       border: 1px solid rgba(255, 255, 255, 0.02);
     }
-    
+
     .finding::before {
       content: '';
       position: absolute;
@@ -766,7 +796,7 @@ export function renderMonitorHtml(): string {
       background: var(--text-muted);
       box-shadow: 0 0 8px var(--text-muted);
     }
-    
+
     .finding.severity-high, .finding.severity-critical {
       border-left: 3px solid rgba(239, 68, 68, 0.4);
       background: rgba(239, 68, 68, 0.02);
@@ -793,20 +823,20 @@ export function renderMonitorHtml(): string {
       background: rgb(99, 102, 241);
       box-shadow: 0 0 8px rgb(99, 102, 241);
     }
-    
+
     .finding-header {
       display: flex;
       align-items: center;
       gap: 10px;
       flex-wrap: wrap;
     }
-    
+
     .finding b {
       color: var(--ink);
       font-weight: 600;
       font-size: 14px;
     }
-    
+
     .location {
       background: rgba(165, 180, 252, 0.1);
       border-radius: 6px;
@@ -821,14 +851,14 @@ export function renderMonitorHtml(): string {
       background: rgba(165, 180, 252, 0.18);
       color: #ffffff;
     }
-    
+
     .finding-desc {
       margin-top: 6px;
       color: var(--text-muted);
       font-size: 13.5px;
       line-height: 1.5;
     }
-    
+
     .finding-rec {
       margin-top: 8px;
       font-size: 13px;
@@ -838,7 +868,7 @@ export function renderMonitorHtml(): string {
       border-radius: 6px;
       border: 1px solid rgba(99, 102, 241, 0.1);
     }
-    
+
     details {
       margin-top: 18px;
       background: rgba(0, 0, 0, 0.15);
@@ -846,7 +876,7 @@ export function renderMonitorHtml(): string {
       border-radius: 10px;
       overflow: hidden;
     }
-    
+
     summary {
       cursor: pointer;
       color: var(--text-muted);
@@ -869,7 +899,7 @@ export function renderMonitorHtml(): string {
       border-bottom-color: var(--panel-border);
       background: rgba(255, 255, 255, 0.02);
     }
-    
+
     pre {
       overflow: auto;
       max-height: 300px;
@@ -881,7 +911,35 @@ export function renderMonitorHtml(): string {
       line-height: 1.6;
       margin: 0;
     }
-    
+
+    .close-btn {
+      padding: 0 !important;
+      width: 24px !important;
+      height: 24px !important;
+      border-radius: 6px !important;
+      min-width: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+      color: var(--text-muted) !important;
+      box-shadow: none !important;
+    }
+    .close-btn:hover {
+      background: rgba(239, 68, 68, 0.15) !important;
+      border-color: rgba(239, 68, 68, 0.3) !important;
+      color: #fca5a5 !important;
+      transform: scale(1.05) !important;
+      box-shadow: 0 0 10px rgba(239, 68, 68, 0.2) !important;
+    }
+    .close-btn svg {
+      width: 14px !important;
+      height: 14px !important;
+      color: currentColor !important;
+      transition: none !important;
+    }
+
     .empty {
       border: 2px dashed var(--panel-border);
       border-radius: 16px;
@@ -893,14 +951,14 @@ export function renderMonitorHtml(): string {
       font-weight: 500;
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.25);
     }
-    
+
     /* Animations */
     @keyframes pulse {
       0% { opacity: 0.6; }
       50% { opacity: 1; }
       100% { opacity: 0.6; }
     }
-    
+
     .badge.running {
       animation: pulse 1.8s infinite ease-in-out;
     }
@@ -912,7 +970,66 @@ export function renderMonitorHtml(): string {
     @keyframes rotate {
       100% { transform: rotate(360deg); }
     }
-    
+
+    .layout-container {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      gap: 28px;
+      align-items: start;
+      transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .layout-container.sidebar-collapsed {
+      grid-template-columns: 1fr 0px;
+      gap: 0px;
+    }
+
+    .main-content {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 108px;
+      max-height: calc(100vh - 140px);
+      overflow-y: auto;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      width: 360px;
+    }
+
+    .sidebar-inner {
+      width: 360px;
+    }
+
+    .layout-container.sidebar-collapsed .sidebar {
+      opacity: 0;
+      pointer-events: none;
+      width: 0px;
+      transform: translateX(20px);
+      overflow: hidden;
+    }
+
+    @media (max-width: 1024px) {
+      .layout-container {
+        grid-template-columns: 1fr !important;
+        gap: 28px !important;
+      }
+      .sidebar {
+        position: static;
+        width: 100% !important;
+        max-height: none;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        transform: none !important;
+      }
+      .layout-container.sidebar-collapsed .sidebar {
+        display: none;
+      }
+    }
+
     @media (max-width: 768px) {
       .top { align-items: flex-start; flex-direction: column; padding: 20px 0; }
       .actions { justify-content: flex-start; width: 100%; }
@@ -950,6 +1067,10 @@ export function renderMonitorHtml(): string {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           <span class="auto-label">Auto Off</span>
         </button>
+        <button id="toggle-sidebar" class="toggle active" type="button" aria-pressed="true" title="Toggle Diagnostics Sidebar">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 4.5v15m6-15v15m-6-15h12A2.25 2.25 0 0121 6.75v10.5a2.25 2.25 0 01-2.25 2.25H9M9 4.5H3.75A2.25 2.25 0 001.5 6.75v10.5a2.25 2.25 0 002.25 2.25H9" /></svg>
+          <span class="sidebar-btn-label">Hide Diagnostics</span>
+        </button>
         <button id="clear" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
           Clear Events
@@ -980,15 +1101,24 @@ export function renderMonitorHtml(): string {
         <span id="job-count">0</span>
       </div>
     </section>
-    <section id="diagnostics" class="diagnostics"></section>
-    <section class="job-section">
-      <h2 class="job-heading">Codex Jobs</h2>
-      <div id="jobs" class="runs"></div>
-    </section>
-    <section class="job-section">
-      <h2 class="job-heading">Review Gate Runs</h2>
-      <div id="runs" class="runs"></div>
-    </section>
+
+    <div id="layout-container" class="layout-container">
+      <div class="main-content">
+        <section class="job-section">
+          <h2 class="job-heading">Codex Jobs</h2>
+          <div id="jobs" class="runs"></div>
+        </section>
+        <section class="job-section">
+          <h2 class="job-heading">Review Gate Runs</h2>
+          <div id="runs" class="runs"></div>
+        </section>
+      </div>
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-inner">
+          <section id="diagnostics" class="diagnostics"></section>
+        </div>
+      </aside>
+    </div>
   </main>
   <script>
     const runsEl = document.getElementById('runs');
@@ -1003,6 +1133,10 @@ export function renderMonitorHtml(): string {
     let autoRefreshTimer = null;
     let autoRefreshEnabled = false;
     let loading = false;
+
+    const toggleSidebarBtn = document.getElementById('toggle-sidebar');
+    const layoutContainer = document.getElementById('layout-container');
+    const sidebarLabel = toggleSidebarBtn.querySelector('.sidebar-btn-label');
 
     const clipboardHelper = function(text) {
       if (!text) return;
@@ -1171,27 +1305,27 @@ export function renderMonitorHtml(): string {
 
     function renderFindings(findings) {
       if (!findings || !findings.length) return '';
-      
+
       const itemsHtml = findings.map((finding) => {
         const location = finding.file ? finding.file + (finding.line ? ':' + finding.line : '') : '';
         const severityClass = finding.severity ? 'severity-' + finding.severity.toLowerCase() : '';
         const severityLabel = finding.severity ? finding.severity.toUpperCase() : 'FINDING';
-        
+
         let locationHtml = '';
         if (location) {
           locationHtml = \`<span class="location" title="Click to copy path" onclick="window.copyToClipboard(this.textContent)">\${h(location)}</span>\`;
         }
-        
+
         let descHtml = '';
         if (finding.description) {
           descHtml = \`<div class="finding-desc">\${h(finding.description)}</div>\`;
         }
-        
+
         let recHtml = '';
         if (finding.recommendation) {
           recHtml = \`<div class="finding-rec"><b>💡 Recommendation:</b> \${h(finding.recommendation)}</div>\`;
         }
-        
+
         return \`
           <div class="finding \${h(severityClass)}">
             <div class="finding-header">
@@ -1221,7 +1355,8 @@ export function renderMonitorHtml(): string {
       const summary = (decision && decision.summary) || (result && result.summary) || (started && started.message) || '';
       const findings = (decision && decision.findings) || (result && result.findings) || [];
       const raw = { id: run.id, events: run.items };
-      
+      const runClasses = ['run', status, verdict].filter(Boolean).map(h).join(' ');
+
       const statusIcon = ICONS[status] || '';
       const verdictIcon = ICONS[verdict] || '';
 
@@ -1231,7 +1366,7 @@ export function renderMonitorHtml(): string {
       }
 
       return \`
-        <article class="run \${h(status)}">
+        <article class="\${runClasses}">
           <div class="run-head">
             <div>
               <div class="run-title">\${h(started && started.workspace || 'Workspace review')}</div>
@@ -1278,15 +1413,25 @@ export function renderMonitorHtml(): string {
         ? '<div class="summary">' + h((diagnostics.nextSteps || []).join('\\n')) + '</div>'
         : '';
       return \`
-        <div class="diagnostics-head">
-          <div>
-            <div class="diagnostics-title">Diagnostics</div>
+        <div class="diagnostics-head" style="cursor: pointer;" onclick="window.toggleDiagnosticsContent()" title="Toggle Diagnostics panel">
+          <div style="flex: 1; min-width: 0;">
+            <div class="diagnostics-title" style="display: flex; align-items: center; gap: 8px;">
+              Diagnostics
+              <svg id="diagnostics-chevron" width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" style="transition: transform 0.2s ease;"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </div>
             <div class="diagnostics-message">\${h(diagnostics.diagnosis || '')}</div>
           </div>
-          <span class="badge \${h(status)}">\${h(status)}</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="badge \${h(status)}">\${h(status)}</span>
+            <button class="close-btn" onclick="event.stopPropagation(); window.toggleSidebarFromInner()" title="Hide Diagnostics Panel" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+          </div>
         </div>
-        <div class="diagnostics-grid">\${checksHtml}</div>
-        \${nextSteps}
+        <div class="diagnostics-content">
+          <div class="diagnostics-grid" style="margin-top: 14px;">\${checksHtml}</div>
+          \${nextSteps}
+        </div>
       \`;
     }
 
@@ -1331,6 +1476,63 @@ export function renderMonitorHtml(): string {
         load().catch(showLoadError);
       }
     }
+
+    function safeGetItem(key) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          return localStorage.getItem(key);
+        }
+      } catch (e) {
+        // Handle security / storage restrictions
+      }
+      return null;
+    }
+
+    function safeSetItem(key, value) {
+      try {
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(key, value);
+        }
+      } catch (e) {
+        // Handle security / storage restrictions
+      }
+    }
+
+    function setSidebarCollapsed(collapsed) {
+      layoutContainer.classList.toggle('sidebar-collapsed', collapsed);
+      toggleSidebarBtn.classList.toggle('active', !collapsed);
+      toggleSidebarBtn.setAttribute('aria-pressed', String(!collapsed));
+      sidebarLabel.textContent = collapsed ? 'Show Diagnostics' : 'Hide Diagnostics';
+      safeSetItem('sidebar-collapsed', String(collapsed));
+    }
+
+    const sidebarState = safeGetItem('sidebar-collapsed');
+    setSidebarCollapsed(sidebarState === 'true');
+
+    toggleSidebarBtn.addEventListener('click', () => {
+      const currentCollapsed = layoutContainer.classList.contains('sidebar-collapsed');
+      setSidebarCollapsed(!currentCollapsed);
+    });
+
+    const globalObj = typeof window !== 'undefined' ? window : globalThis;
+
+    globalObj.toggleDiagnosticsContent = function() {
+      const isCollapsed = !diagnosticsEl.classList.contains('diagnostics-collapsed');
+      diagnosticsEl.classList.toggle('diagnostics-collapsed', isCollapsed);
+      safeSetItem('diagnostics-collapsed', String(isCollapsed));
+    };
+
+    globalObj.toggleSidebarFromInner = function() {
+      const currentCollapsed = layoutContainer.classList.contains('sidebar-collapsed');
+      setSidebarCollapsed(!currentCollapsed);
+    };
+
+    function initDiagnosticsCollapse() {
+      const isCollapsed = safeGetItem('diagnostics-collapsed') !== 'false';
+      diagnosticsEl.classList.toggle('diagnostics-collapsed', isCollapsed);
+    }
+
+    initDiagnosticsCollapse();
 
     document.getElementById('refresh').addEventListener('click', () => load().catch(showLoadError));
     autoRefreshButton.addEventListener('click', () => setAutoRefresh(!autoRefreshEnabled));

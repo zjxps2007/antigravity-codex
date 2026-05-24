@@ -62,14 +62,15 @@ function runHook(
   dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-")),
   enabled = true,
   workspacePaths = [workspace],
-  hookCwd = workspace
+  hookCwd = workspace,
+  extraInput: Record<string, unknown> = {}
 ) {
   if (enabled) {
     withDataRoot(dataRoot, () => setReviewGateEnabled(workspace, true));
   }
   return spawnSync(process.execPath, [hookScript], {
     cwd: hookCwd,
-    input: JSON.stringify({ fullyIdle: true, terminationReason: "model_stop", workspacePaths }),
+    input: JSON.stringify({ fullyIdle: true, terminationReason: "model_stop", workspacePaths, ...extraInput }),
     encoding: "utf8",
     env: {
       ...process.env,
@@ -80,6 +81,20 @@ function runHook(
       PWD: hookCwd
     }
   });
+}
+
+function makeTranscript(userRequest: string): string {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-transcript-"));
+  const transcript = path.join(tempRoot, "transcript.jsonl");
+  fs.writeFileSync(
+    transcript,
+    `${JSON.stringify({
+      source: "USER_EXPLICIT",
+      type: "USER_INPUT",
+      content: `<USER_REQUEST>\n${userRequest}\n</USER_REQUEST>`
+    })}\n`
+  );
+  return transcript;
 }
 
 test("review gate allows without running Codex when disabled", () => {
@@ -171,5 +186,22 @@ test("review gate falls back to enabled workspace state when Antigravity omits w
     const events = readReviewGateEvents(10);
     assert.equal(events[0]?.workspace, workspace);
     assert.ok(events.some((event) => event.type === "codex-result" && event.verdict === "approve"));
+  });
+});
+
+test("review gate skips explicit codex slash command sessions", () => {
+  const workspace = makeGitWorkspace();
+  const dataRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-gate-data-"));
+  const transcriptPath = makeTranscript("/codex:monitor");
+  const payload = { verdict: "needs-attention", summary: "should not run", findings: [], next_steps: [] };
+  const fakeCodex = makeFakeCodex(payload);
+  const result = runHook(workspace, fakeCodex, payload, dataRoot, true, [workspace], workspace, { transcriptPath });
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout), { decision: "allow" });
+
+  withDataRoot(dataRoot, () => {
+    const events = readReviewGateEvents(10);
+    assert.ok(events.some((event) => event.type === "skipped" && event.message?.includes("/codex command")));
+    assert.ok(!events.some((event) => event.type === "codex-result"));
   });
 });

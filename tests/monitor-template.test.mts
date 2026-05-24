@@ -150,3 +150,132 @@ test("monitor template renders event timeline and execution logs", async () => {
   assert.match(jobOutput, /Job Log/);
   assert.match(jobOutput, /job log line/);
 });
+
+test("monitor template handles throwing localStorage safely", async () => {
+  const elements = new Map<string, FakeElement>();
+  for (const id of [
+    "runs",
+    "jobs",
+    "updated",
+    "events-file",
+    "run-count",
+    "job-count",
+    "diagnostics",
+    "auto-refresh",
+    "refresh",
+    "clear",
+    "stop",
+    "toggle-sidebar",
+    "layout-container"
+  ]) {
+    createFakeElement(elements, id);
+  }
+
+  const context = vm.createContext({
+    document: {
+      getElementById: (id: string) => elements.get(id) ?? createFakeElement(elements, id)
+    },
+    fetch: async () => ({
+      json: async () => ({
+        events: [],
+        jobs: [],
+        diagnostics: {},
+        eventsFile: "/tmp/events.jsonl"
+      })
+    }),
+    Date,
+    Map,
+    Number,
+    String,
+    JSON,
+    setInterval,
+    clearInterval,
+    confirm: () => false,
+    navigator: { clipboard: { writeText: () => undefined } },
+    localStorage: {
+      getItem: () => { throw new Error("Storage access denied"); },
+      setItem: () => { throw new Error("Storage access denied"); }
+    },
+    console
+  });
+
+  // Should compile and run without throwing ReferenceError or SecurityError
+  vm.runInContext(extractScript(renderMonitorHtml()), context, { timeout: 5000 });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const output = elements.get("runs")?.innerHTML ?? "";
+  assert.equal(elements.get("run-count")?.textContent, "0");
+  assert.equal(elements.get("job-count")?.textContent, "0");
+});
+
+test("monitor template uses needs-attention class on continue cards", async () => {
+  assert.match(renderMonitorHtml(), /\.badge\.continue \{[\s\S]*?color: #38bdf8;/);
+
+  const elements = new Map<string, FakeElement>();
+  for (const id of [
+    "runs",
+    "jobs",
+    "updated",
+    "events-file",
+    "run-count",
+    "job-count",
+    "diagnostics",
+    "auto-refresh",
+    "refresh",
+    "clear",
+    "stop",
+    "toggle-sidebar",
+    "layout-container"
+  ]) {
+    createFakeElement(elements, id);
+  }
+
+  const events = [
+    {
+      id: "gate-needs-attention",
+      workspace: "/tmp/workspace",
+      time: "2026-05-23T08:00:00.000Z",
+      type: "started",
+      message: "terminationReason=NO_TOOL_CALL fullyIdle=true"
+    },
+    {
+      id: "gate-needs-attention",
+      workspace: "/tmp/workspace",
+      time: "2026-05-23T08:00:01.000Z",
+      type: "decision",
+      decision: "continue",
+      verdict: "needs-attention",
+      summary: "Fix before stopping."
+    }
+  ];
+
+  const context = vm.createContext({
+    document: {
+      getElementById: (id: string) => elements.get(id) ?? createFakeElement(elements, id)
+    },
+    fetch: async () => ({
+      json: async () => ({
+        events,
+        jobs: [],
+        diagnostics: {},
+        eventsFile: "/tmp/events.jsonl"
+      })
+    }),
+    Date,
+    Map,
+    Number,
+    String,
+    JSON,
+    setInterval,
+    clearInterval,
+    confirm: () => false,
+    navigator: { clipboard: { writeText: () => undefined } },
+    console
+  });
+
+  vm.runInContext(extractScript(renderMonitorHtml()), context, { timeout: 5000 });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+
+  const output = elements.get("runs")?.innerHTML ?? "";
+  assert.match(output, /class="run continue needs-attention"/);
+});

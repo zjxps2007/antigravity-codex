@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import process from "node:process";
 import {
   appendReviewGateEvent,
@@ -17,6 +18,8 @@ interface StopHookInput {
   error?: string;
   fullyIdle?: boolean;
   workspacePaths?: string[];
+  artifactDirectoryPath?: string;
+  transcriptPath?: string;
 }
 
 function readStdin(): Promise<string> {
@@ -99,6 +102,65 @@ function hasGitChanges(cwd: string): boolean {
   return result.status === 0 && Boolean(result.stdout?.trim());
 }
 
+function transcriptCandidates(input: StopHookInput): string[] {
+  return [
+    input.transcriptPath,
+    input.artifactDirectoryPath
+      ? path.join(input.artifactDirectoryPath, ".system_generated", "logs", "transcript.jsonl")
+      : undefined,
+    input.artifactDirectoryPath
+      ? path.join(input.artifactDirectoryPath, ".system_generated", "logs", "transcript_full.jsonl")
+      : undefined
+  ].filter((candidate): candidate is string => Boolean(candidate));
+}
+
+function readFileTail(file: string, maxBytes = 256 * 1024): string | null {
+  try {
+    if (!fs.existsSync(file)) return null;
+    const stat = fs.statSync(file);
+    const start = Math.max(0, stat.size - maxBytes);
+    const length = stat.size - start;
+    const fd = fs.openSync(file, "r");
+    try {
+      const buffer = Buffer.alloc(length);
+      fs.readSync(fd, buffer, 0, length, start);
+      return buffer.toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function extractUserRequest(content: string): string {
+  const match = content.match(/<USER_REQUEST>\s*([\s\S]*?)\s*<\/USER_REQUEST>/);
+  return (match?.[1] ?? content).trim();
+}
+
+function latestUserRequest(input: StopHookInput): string | null {
+  for (const transcript of transcriptCandidates(input)) {
+    const content = readFileTail(transcript);
+    if (!content) continue;
+    const lines = content.split(/\r?\n/).filter(Boolean).reverse();
+    for (const line of lines) {
+      try {
+        const entry = JSON.parse(line) as { source?: string; type?: string; content?: unknown };
+        if (entry.type !== "USER_INPUT" || typeof entry.content !== "string") continue;
+        if (entry.source && !entry.source.startsWith("USER")) continue;
+        return extractUserRequest(entry.content);
+      } catch {
+        // Ignore malformed transcript lines.
+      }
+    }
+  }
+  return null;
+}
+
+function isCodexSlashCommandSession(input: StopHookInput): boolean {
+  return /^\/codex(?::|$)/.test(latestUserRequest(input) ?? "");
+}
+
 async function main(): Promise<void> {
   const input = parseInput(await readStdin());
   const cwd = reviewWorkspace(input);
@@ -151,6 +213,11 @@ async function main(): Promise<void> {
   if (process.env.AGY_CODEX_REVIEW_GATE_BYPASS === "1") {
     recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Bypassed by AGY_CODEX_REVIEW_GATE_BYPASS." });
     finishAllow("Bypassed by AGY_CODEX_REVIEW_GATE_BYPASS.");
+    return;
+  }
+  if (isCodexSlashCommandSession(input)) {
+    recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Skipped for explicit /codex command session." });
+    finishAllow("Skipped for explicit /codex command session.");
     return;
   }
   if (input.fullyIdle === false || input.terminationReason === "error") {

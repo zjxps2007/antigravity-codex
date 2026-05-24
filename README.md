@@ -85,6 +85,8 @@ The command files live under `commands/` and use `disable-model-invocation: true
 
 `/codex:setup --enable-review-gate` enables a Stop hook that runs a read-only Codex review when Antigravity is about to stop after editing code. It updates the workspace review-gate config and merges the active Stop hook into `~/.gemini/config/hooks.json`, which is the hooks file Antigravity CLI loads at runtime. If Codex returns actionable findings, the hook asks Antigravity to continue and address them. Disable it with `/codex:setup --disable-review-gate`.
 
+The automatic Stop-hook review skips explicit `/codex:*` slash-command sessions, so commands such as `/codex:monitor`, `/codex:setup`, and `/codex:review` do not trigger a second review just because the workspace already has uncommitted changes.
+
 The committed plugin hook manifest is static and stays packaged with its npx command. `setup --enable-review-gate` does not write local absolute paths into the repo's `hooks/hooks.json`; local machine paths are written only to the user's active Antigravity hooks config under `~/.gemini/config/hooks.json`.
 
 `/codex:monitor` starts a local web UI for review gate runs at `http://127.0.0.1:8765`. The Stop hook records started/skipped/result/decision events under the local Antigravity Codex data directory, and the monitor shows Codex verdicts, findings, and raw events. Stop the server with `/codex:monitor --stop`; clear old events with `/codex:monitor --clear`; use `--foreground` when you want the server tied to the current terminal process.
