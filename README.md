@@ -144,6 +144,24 @@ By default, the monitor binds to `127.0.0.1` and is visible only on the same mac
 
 Then open `http://<monitor-machine-ip>:8765` from the other PC. The monitor has no authentication, so do not expose it to untrusted networks.
 
+### Windows Notes
+
+On Windows, older plugin versions could print `Codex monitor running...` and then immediately report `Codex monitor is not running` from `/codex:monitor --status`. Update to the latest plugin; current versions launch the background monitor through Windows WMI/CIM first and fall back to PowerShell `Start-Process`.
+
+```bash
+agy plugin uninstall codex
+agy plugin install https://github.com/zjxps2007/antigravity-codex.git
+```
+
+After reinstalling, run:
+
+```text
+/codex:monitor
+/codex:monitor --status
+```
+
+If another PC cannot reach the monitor after using `--host 0.0.0.0`, allow inbound TCP traffic for the selected port in Windows Firewall.
+
 Monitor sections:
 
 - `Review Gate Runs`: automatic Stop-hook reviews.

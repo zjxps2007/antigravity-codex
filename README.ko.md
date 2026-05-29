@@ -144,6 +144,24 @@ http://127.0.0.1:8765
 
 다른 PC에서는 `http://<monitor 실행 PC의 IP>:8765`로 접속합니다. monitor에는 인증이 없으므로 신뢰할 수 없는 네트워크에 노출하지 마세요.
 
+### Windows 참고
+
+Windows에서 이전 버전은 `/codex:monitor`가 `Codex monitor running...`을 출력한 직후 `/codex:monitor --status`에서 `Codex monitor is not running`으로 보일 수 있습니다. 최신 버전은 background monitor를 Windows WMI/CIM으로 먼저 실행하고 실패 시 PowerShell `Start-Process`로 fallback합니다.
+
+```bash
+agy plugin uninstall codex
+agy plugin install https://github.com/zjxps2007/antigravity-codex.git
+```
+
+재설치 후:
+
+```text
+/codex:monitor
+/codex:monitor --status
+```
+
+`--host 0.0.0.0`으로 실행했는데 다른 PC에서 접속되지 않으면 Windows 방화벽에서 해당 포트의 inbound TCP 접근을 허용해야 합니다.
+
 화면 해석:
 
 - `Review Gate Runs`: 자동 Stop-hook 리뷰
