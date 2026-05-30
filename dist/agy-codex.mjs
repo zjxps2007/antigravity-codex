@@ -3,13 +3,14 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "./lib/args.mjs";
-import { inspectActiveReviewGateHook, installActiveReviewGateHook, NPX_REVIEW_GATE_COMMAND, removeActiveReviewGateHook } from "./lib/antigravity-hooks.mjs";
+import { disableImportedReviewGateHooks, inspectActiveReviewGateHook, inspectImportedReviewGateHooks, installActiveReviewGateHook, NPX_REVIEW_GATE_COMMAND, removeActiveReviewGateHook } from "./lib/antigravity-hooks.mjs";
 import { buildDoctorReport, printDoctorReport } from "./lib/doctor.mjs";
 import { commandAvailable, codexAvailable, resolveRuntimeRoot } from "./lib/exec-resolver.mjs";
 import { handleMonitor, startMonitorServer, normalizeMonitorHost, parseMonitorPort } from "./lib/monitor-server.mjs";
 import { buildAdversarialRequest, buildReviewRequest, buildTaskRequest, optionBool, optionString } from "./lib/request-builders.mjs";
+import { readReviewResultForJob } from "./lib/review-result.mjs";
 import { executeTrackedRequest, killProcessTree, runMaybeBackground } from "./lib/runner.mjs";
-import { findJob, findLatestResultJob, isReviewGateEnabled, listJobs, nowIso, readJobArtifact, resolveWorkspaceRoot, setReviewGateEnabled, upsertJob, workspaceStateDir } from "./lib/state.mjs";
+import { findJob, findLatestResultJob, isReviewGateEnabled, listReviewGateEnabledWorkspaces, listJobs, nowIso, readJobArtifact, resolveWorkspaceRoot, setReviewGateEnabled, upsertJob, workspaceStateDir } from "./lib/state.mjs";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT_DIR = resolveRuntimeRoot(path.dirname(SCRIPT_PATH));
 function reviewGateHookFile() {
@@ -41,18 +42,28 @@ async function handleSetup(argv) {
     }
     const cwd = path.resolve(optionString(options, "cwd") ?? process.cwd());
     let activeHook = inspectActiveReviewGateHook();
+    let importedHooks = inspectImportedReviewGateHooks();
     if (optionBool(options, "enable-review-gate")) {
         setReviewGateEnabled(cwd, true);
         activeHook = installActiveReviewGateHook(ROOT_DIR);
+        importedHooks = inspectImportedReviewGateHooks();
     }
     else if (optionBool(options, "disable-review-gate")) {
         setReviewGateEnabled(cwd, false);
-        activeHook = removeActiveReviewGateHook();
+        if (listReviewGateEnabledWorkspaces().length === 0) {
+            activeHook = removeActiveReviewGateHook();
+            importedHooks = disableImportedReviewGateHooks();
+        }
+        else {
+            activeHook = inspectActiveReviewGateHook();
+            importedHooks = inspectImportedReviewGateHooks();
+        }
     }
     const node = commandAvailable("node", ["--version"], cwd);
     const codex = codexAvailable(cwd);
     const reviewGateEnabled = isReviewGateEnabled(cwd);
-    const ready = node.available && codex.available && (!reviewGateEnabled || activeHook.installed);
+    const importedHookInstalled = importedHooks.some((hook) => hook.installed);
+    const ready = node.available && codex.available && (!reviewGateEnabled || (activeHook.installed && importedHookInstalled));
     const reviewGate = {
         enabled: reviewGateEnabled,
         configDir: workspaceStateDir(cwd),
@@ -61,7 +72,9 @@ async function handleSetup(argv) {
         activeHooksFile: activeHook.hooksFile,
         activeHookInstalled: activeHook.installed,
         activeHookCommand: activeHook.command,
-        activeHookError: activeHook.error
+        activeHookError: activeHook.error,
+        importedHookInstalled,
+        importedHooks
     };
     const payload = {
         ready,
@@ -77,6 +90,9 @@ async function handleSetup(argv) {
                     : ["Install Codex with `npm install -g @openai/codex` and run `codex login`."]),
                 ...(reviewGate.enabled && !reviewGate.activeHookInstalled
                     ? [`Run \`/codex:setup --enable-review-gate\` to install the active Stop hook at ${reviewGate.activeHooksFile}.`]
+                    : []),
+                ...(reviewGate.enabled && !reviewGate.importedHookInstalled
+                    ? ["Run `/codex:setup --enable-review-gate` to activate the plugin Stop hook files Antigravity loads."]
                     : [])
             ]
     };
@@ -90,6 +106,7 @@ async function handleSetup(argv) {
     console.log(`Workspace: ${payload.workspaceRoot}`);
     console.log(`Review gate: ${reviewGate.enabled ? "enabled" : "disabled"}`);
     console.log(`Active Stop hook: ${reviewGate.activeHookInstalled ? `installed at ${reviewGate.activeHooksFile}` : `missing at ${reviewGate.activeHooksFile}`}`);
+    console.log(`Plugin Stop hook: ${reviewGate.importedHookInstalled ? "installed" : "missing or disabled"}`);
     if (reviewGate.activeHookError) {
         console.log(`Active Stop hook error: ${reviewGate.activeHookError}`);
     }
@@ -136,7 +153,21 @@ async function handleTask(argv) {
     await runMaybeBackground(request, options, SCRIPT_PATH);
 }
 function renderStatus(job) {
-    return `${job.id}\t${job.kind ?? ""}\t${job.status ?? ""}\t${job.pid ?? ""}\t${job.summary ?? ""}`;
+    const reviewResult = readReviewResultForJob(job);
+    return `${job.id}\t${job.kind ?? ""}\t${job.status ?? ""}\t${job.pid ?? ""}\t${reviewResult?.verdict ?? ""}\t${reviewResult?.summary ?? job.summary ?? ""}`;
+}
+function statusPayload(job) {
+    const reviewResult = readReviewResultForJob(job);
+    if (!reviewResult) {
+        return job;
+    }
+    return {
+        ...job,
+        reviewVerdict: reviewResult.verdict,
+        reviewSummary: reviewResult.summary,
+        reviewFindings: reviewResult.findings,
+        reviewNextSteps: reviewResult.nextSteps
+    };
 }
 function handleStatus(argv) {
     const { options, positionals } = parseArgs(argv, {
@@ -149,14 +180,14 @@ function handleStatus(argv) {
         ? [findJob(cwd, reference)].filter((job) => Boolean(job))
         : listJobs(cwd).slice(0, 12);
     if (optionBool(options, "json")) {
-        console.log(JSON.stringify(jobs, null, 2));
+        console.log(JSON.stringify(jobs.map(statusPayload), null, 2));
         return;
     }
     if (!jobs.length) {
         console.log("No Codex jobs found for this workspace.");
         return;
     }
-    console.log("id\tkind\tstatus\tpid\tsummary");
+    console.log("id\tkind\tstatus\tpid\tverdict\tsummary");
     for (const job of jobs)
         console.log(renderStatus(job));
 }

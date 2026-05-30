@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 import { buildDoctorReport } from "./doctor.mjs";
 import { resolveRuntimeRoot } from "./exec-resolver.mjs";
 import { clearReviewGateEvents, clearMonitorState, readMonitorState, readReviewGateEvents, reviewGateEventsFile, writeMonitorState } from "./review-gate-events.mjs";
+import { readReviewResultForJob } from "./review-result.mjs";
 import { renderMonitorHtml } from "./monitor-template.mjs";
-import { listJobs, clearJobs } from "./state.mjs";
+import { listJobs, clearJobs, resolveWorkspaceRoot } from "./state.mjs";
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 8765;
 const MAX_LOG_TAIL_BYTES = 24_000;
@@ -136,6 +137,7 @@ function readFileTail(file, maxBytes = MAX_LOG_TAIL_BYTES) {
     }
 }
 function monitorJob(job) {
+    const reviewResult = readReviewResultForJob(job);
     return {
         id: job.id,
         kind: job.kind,
@@ -150,7 +152,11 @@ function monitorJob(job) {
         signal: job.signal,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,
-        completedAt: job.completedAt
+        completedAt: job.completedAt,
+        reviewVerdict: reviewResult?.verdict,
+        reviewSummary: reviewResult?.summary,
+        reviewFindings: reviewResult?.findings,
+        reviewNextSteps: reviewResult?.nextSteps
     };
 }
 export function handleMonitorRequest(request, response, state, shutdown) {
@@ -166,8 +172,9 @@ export function handleMonitorRequest(request, response, state, shutdown) {
         }
         if (request.method === "GET" && url.pathname === "/api/events") {
             const limit = Number(url.searchParams.get("limit") ?? 200);
+            const workspaceRoot = resolveWorkspaceRoot(process.cwd());
             sendJson(response, 200, {
-                events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200),
+                events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200, workspaceRoot),
                 jobs: listJobs(process.cwd()).slice(0, 20).map(monitorJob),
                 diagnostics: buildDoctorReport(process.cwd(), { rootDir: ROOT_DIR, checkExecutables: false }),
                 eventsFile: reviewGateEventsFile(),
@@ -176,7 +183,7 @@ export function handleMonitorRequest(request, response, state, shutdown) {
             return;
         }
         if (request.method === "DELETE" && url.pathname === "/api/events") {
-            clearReviewGateEvents();
+            clearReviewGateEvents(resolveWorkspaceRoot(process.cwd()));
             clearJobs(process.cwd());
             sendJson(response, 200, { cleared: true, eventsFile: reviewGateEventsFile() });
             return;
@@ -356,7 +363,7 @@ function startDetachedMonitorProcess(scriptPath, host, port) {
 export async function handleMonitor(argv, scriptPath, options) {
     const asJson = options.json === true;
     if (options.clear === true) {
-        clearReviewGateEvents();
+        clearReviewGateEvents(resolveWorkspaceRoot(process.cwd()));
         clearJobs(process.cwd());
         if (asJson) {
             console.log(JSON.stringify({ cleared: true, eventsFile: reviewGateEventsFile() }, null, 2));

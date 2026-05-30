@@ -508,15 +508,62 @@ export function renderMonitorHtml(): string {
     .run.allow::before {
       background: rgb(16, 185, 129);
     }
+    .run.approve::before,
+    .run.approved::before {
+      background: rgb(16, 185, 129);
+    }
     .run.allow:hover {
       border-color: rgba(16, 185, 129, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.08);
+    }
+    .run.approve:hover,
+    .run.approved:hover {
+      border-color: rgba(16, 185, 129, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(16, 185, 129, 0.08);
+    }
+
+    .run.allow.interrupted::before {
+      background: rgb(234, 179, 8);
+    }
+    .run.interrupted::before {
+      background: rgb(234, 179, 8);
+    }
+    .run.allow.interrupted:hover {
+      border-color: rgba(234, 179, 8, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(234, 179, 8, 0.08);
+    }
+    .run.interrupted:hover {
+      border-color: rgba(234, 179, 8, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(234, 179, 8, 0.08);
+    }
+    .run.allow.skipped::before {
+      background: rgb(148, 163, 184);
+    }
+    .run.skipped::before {
+      background: rgb(148, 163, 184);
+    }
+    .run.allow.skipped:hover {
+      border-color: rgba(148, 163, 184, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(148, 163, 184, 0.08);
+    }
+    .run.skipped:hover {
+      border-color: rgba(148, 163, 184, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(148, 163, 184, 0.08);
     }
 
     .run.continue::before {
       background: rgb(239, 68, 68);
     }
+    .run.failed::before,
+    .run.cancelled::before {
+      background: rgb(239, 68, 68);
+    }
     .run.continue:hover {
+      border-color: rgba(239, 68, 68, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.08);
+    }
+    .run.failed:hover,
+    .run.cancelled:hover {
       border-color: rgba(239, 68, 68, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.08);
     }
@@ -534,6 +581,14 @@ export function renderMonitorHtml(): string {
     .run.running:hover {
       border-color: rgba(245, 158, 11, 0.3);
       box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(245, 158, 11, 0.08);
+    }
+
+    .run.timeout::before {
+      background: rgb(239, 68, 68);
+    }
+    .run.timeout:hover {
+      border-color: rgba(239, 68, 68, 0.3);
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.6), 0 0 20px rgba(239, 68, 68, 0.08);
     }
 
     .run-head {
@@ -582,6 +637,15 @@ export function renderMonitorHtml(): string {
       font-weight: 700;
       color: var(--ink);
       letter-spacing: -0.015em;
+    }
+
+    .run-subtitle {
+      margin-top: 4px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      word-break: break-all;
     }
 
     .run-time {
@@ -633,6 +697,26 @@ export function renderMonitorHtml(): string {
       color: #fbbf24;
       border: 1px solid rgba(245, 158, 11, 0.2);
     }
+    .badge.queued {
+      background: rgba(148, 163, 184, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .badge.timeout {
+      background: rgba(239, 68, 68, 0.1);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    .badge.interrupted {
+      background: rgba(234, 179, 8, 0.1);
+      color: #fde047;
+      border: 1px solid rgba(234, 179, 8, 0.2);
+    }
+    .badge.skipped {
+      background: rgba(148, 163, 184, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+    }
     .badge.needs-attention {
       background: rgba(56, 189, 248, 0.1);
       color: #38bdf8;
@@ -643,10 +727,20 @@ export function renderMonitorHtml(): string {
       color: #34d399;
       border: 1px solid rgba(16, 185, 129, 0.2);
     }
+    .badge.approved {
+      background: rgba(16, 185, 129, 0.1);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
     .badge.completed {
       background: rgba(16, 185, 129, 0.1);
       color: #34d399;
       border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+    .badge.process-done {
+      background: rgba(148, 163, 184, 0.1);
+      color: #cbd5e1;
+      border: 1px solid rgba(148, 163, 184, 0.18);
     }
     .badge.failed,
     .badge.cancelled {
@@ -674,7 +768,27 @@ export function renderMonitorHtml(): string {
     .run.allow .summary {
       border-left-color: rgba(16, 185, 129, 0.4);
     }
+    .run.approve .summary,
+    .run.approved .summary {
+      border-left-color: rgba(16, 185, 129, 0.4);
+    }
+    .run.allow.interrupted .summary {
+      border-left-color: rgba(234, 179, 8, 0.4);
+    }
+    .run.interrupted .summary {
+      border-left-color: rgba(234, 179, 8, 0.4);
+    }
+    .run.allow.skipped .summary {
+      border-left-color: rgba(148, 163, 184, 0.4);
+    }
+    .run.skipped .summary {
+      border-left-color: rgba(148, 163, 184, 0.4);
+    }
     .run.continue .summary {
+      border-left-color: rgba(239, 68, 68, 0.4);
+    }
+    .run.failed .summary,
+    .run.cancelled .summary {
       border-left-color: rgba(239, 68, 68, 0.4);
     }
     .run.needs-attention .summary {
@@ -682,6 +796,9 @@ export function renderMonitorHtml(): string {
     }
     .run.running .summary {
       border-left-color: rgba(245, 158, 11, 0.4);
+    }
+    .run.timeout .summary {
+      border-left-color: rgba(239, 68, 68, 0.4);
     }
 
     .event-timeline,
@@ -774,13 +891,62 @@ export function renderMonitorHtml(): string {
       margin-top: 28px;
     }
 
+    .section-heading-button {
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      padding: 0 0 12px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: inherit;
+      cursor: pointer;
+      transform: none;
+    }
+
+    .section-heading-button:hover {
+      background: transparent;
+      border-color: transparent;
+      box-shadow: none;
+      transform: none;
+      color: inherit;
+    }
+
     .job-heading {
-      margin: 0 0 12px;
+      margin: 0;
       color: var(--ink);
       font-size: 13px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+    }
+
+    .section-heading-button:hover .job-heading {
+      color: var(--text);
+    }
+
+    .section-chevron {
+      width: 16px;
+      height: 16px;
+      color: var(--text-muted);
+      transition: transform 0.2s ease, color 0.2s ease;
+      flex-shrink: 0;
+    }
+
+    .section-heading-button:hover .section-chevron {
+      color: var(--text);
+    }
+
+    .job-section.section-collapsed .runs {
+      display: none;
+    }
+
+    .job-section.section-collapsed .section-chevron {
+      transform: rotate(-90deg);
     }
 
     .findings-container {
@@ -1135,8 +1301,11 @@ export function renderMonitorHtml(): string {
 
     <div id="layout-container" class="layout-container">
       <div class="main-content">
-        <section class="job-section">
-          <h2 class="job-heading">Codex Jobs</h2>
+        <section id="codex-jobs-section" class="job-section">
+          <button id="codex-jobs-toggle" class="section-heading-button" type="button" aria-expanded="true" title="Toggle Codex Jobs">
+            <h2 class="job-heading">Codex Jobs</h2>
+            <svg class="section-chevron" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+          </button>
           <div id="jobs" class="runs"></div>
         </section>
         <section class="job-section">
@@ -1161,9 +1330,12 @@ export function renderMonitorHtml(): string {
     const diagnosticsEl = document.getElementById('diagnostics');
     const autoRefreshButton = document.getElementById('auto-refresh');
     const autoRefreshLabel = autoRefreshButton.querySelector('.auto-label');
+    const codexJobsSection = document.getElementById('codex-jobs-section');
+    const codexJobsToggle = document.getElementById('codex-jobs-toggle');
     let autoRefreshTimer = null;
     let autoRefreshEnabled = false;
     let loading = false;
+    const STALE_RUNNING_MS = 6 * 60 * 1000;
 
     const toggleSidebarBtn = document.getElementById('toggle-sidebar');
     const layoutContainer = document.getElementById('layout-container');
@@ -1184,10 +1356,14 @@ export function renderMonitorHtml(): string {
     const ICONS = {
       allow: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
       approve: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      approved: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
       continue: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>',
       'needs-attention': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>',
       running: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>',
       pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      skipped: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>',
+      timeout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      interrupted: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008M10.29 3.86L1.82 18a2.25 2.25 0 001.93 3.38h16.5A2.25 2.25 0 0022.18 18L13.71 3.86a2 2 0 00-3.42 0z" /></svg>',
       finding: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>'
     };
 
@@ -1214,6 +1390,10 @@ export function renderMonitorHtml(): string {
 
     function pick(items, type) {
       return [...items].reverse().find((event) => event.type === type);
+    }
+
+    function domId(prefix, value) {
+      return prefix + '-' + String(value == null ? 'unknown' : value).replace(/[^a-zA-Z0-9_-]/g, '-');
     }
 
     function eventTime(value) {
@@ -1281,14 +1461,33 @@ export function renderMonitorHtml(): string {
       \`;
     }
 
-    function renderJob(job) {
+    function renderJob(job, isFirst) {
+      const jobId = String(job.id || 'unknown');
       const status = job.status || 'unknown';
       const phase = job.phase || status;
+      const reviewVerdict = job.reviewVerdict || '';
+      const reviewSummary = job.reviewSummary || '';
+      const reviewFindings = job.reviewFindings || [];
       const updated = job.updatedAt || job.createdAt || job.completedAt;
       const log = job.logTail || '';
+      const collapsedState = safeGetItem('job-collapsed-' + jobId);
+      const isCollapsed = collapsedState !== null ? collapsedState === 'true' : !isFirst;
+      const jobTone = reviewVerdict || (
+        status === 'completed' ? 'approve' :
+        status === 'queued' ? 'skipped' :
+        status
+      );
+      const jobClasses = Array.from(new Set(['run', status, jobTone, isCollapsed ? 'run-collapsed' : ''].filter(Boolean))).map(h).join(' ');
+      const jobDomId = domId('job', jobId);
+      const statusIcon = ICONS[status] || ICONS[jobTone] || '';
+      const verdictIcon = ICONS[reviewVerdict] || '';
+      const statusBadgeClass = reviewVerdict && status === 'completed' ? 'process-done' : status;
+      const statusLabel = reviewVerdict && status === 'completed' ? 'process done' : status;
 
       const kindBadge = job.kind ? \`<span class="badge">\${h(job.kind)}</span>\` : '';
       const pidBadge = job.pid ? \`<span class="badge">pid \${h(job.pid)}</span>\` : '';
+      const verdictBadge = reviewVerdict ? \`<span class="badge \${h(reviewVerdict)}">\${verdictIcon}\${h(reviewVerdict)}</span>\` : '';
+      const summary = reviewSummary || job.summary || phase;
 
       let logHtml = '';
       if (log) {
@@ -1309,19 +1508,25 @@ export function renderMonitorHtml(): string {
       }
 
       return \`
-        <article class="run \${h(status)}">
-          <div class="run-head">
+        <article id="\${h(jobDomId)}" class="\${jobClasses}">
+          <div class="run-head" onclick="window.toggleJobCollapse(\${h(JSON.stringify(jobId))})" title="Click to expand/collapse">
             <div>
               <div class="run-title">\${h(job.title || job.id)}</div>
+              <div class="run-subtitle">\${h(jobId)}</div>
               <div class="badge-group">
-                <span class="badge \${h(status)}">\${h(status)}</span>
+                <span class="badge \${h(statusBadgeClass)}">\${statusIcon}\${h(statusLabel)}</span>
+                \${verdictBadge}
                 \${kindBadge}
                 \${pidBadge}
               </div>
             </div>
-            <div class="run-time">\${h(updated ? new Date(updated).toLocaleString() : '')}</div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="run-time">\${h(updated ? new Date(updated).toLocaleString() : '')}</div>
+              <svg class="run-chevron" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" /></svg>
+            </div>
           </div>
-          <div class="summary">\${h(job.summary || phase)}</div>
+          <div class="summary">\${h(summary)}</div>
+          \${renderFindings(reviewFindings)}
           \${logHtml}
           <details>
             <summary>
@@ -1380,12 +1585,31 @@ export function renderMonitorHtml(): string {
     function renderRun(run, isFirst) {
       const started = pick(run.items, 'started');
       const result = pick(run.items, 'codex-result');
+      const error = pick(run.items, 'error');
+      const skipped = pick(run.items, 'skipped');
       const decision = pick(run.items, 'decision');
-      const status = decision ? decision.decision : 'running';
-      const verdict = (decision && decision.verdict) || (result && result.verdict) || 'pending';
-      const summary = (decision && decision.summary) || (result && result.summary) || (started && started.message) || '';
+      let status = decision ? decision.decision : 'running';
+      let verdict = (decision && decision.verdict) || (result && result.verdict) || 'pending';
+      let summary = (decision && decision.summary) || (result && result.summary) || (skipped && skipped.message) || (started && started.message) || '';
       const findings = (decision && decision.findings) || (result && result.findings) || [];
       const raw = { id: run.id, events: run.items };
+      const lastTime = Date.parse(run.last.time || '');
+
+      if (!decision && !result && Number.isFinite(lastTime) && Date.now() - lastTime > STALE_RUNNING_MS) {
+        status = 'timeout';
+        verdict = 'interrupted';
+        summary = 'Review gate started but did not record a result before the hook timeout. Codex may have hung or Antigravity may have terminated the hook.';
+      }
+
+      if (decision && decision.decision === 'allow' && error) {
+        verdict = 'interrupted';
+        summary = decision.summary || error.message || summary;
+      }
+
+      if (decision && decision.decision === 'allow' && verdict === 'pending' && skipped) {
+        verdict = 'skipped';
+        summary = skipped.message || summary;
+      }
 
       const collapsedState = safeGetItem('run-collapsed-' + run.id);
       const isCollapsed = collapsedState !== null ? collapsedState === 'true' : !isFirst;
@@ -1404,6 +1628,7 @@ export function renderMonitorHtml(): string {
           <div class="run-head" onclick="window.toggleRunCollapse('\${run.id}')" title="Click to expand/collapse">
             <div style="flex: 1; min-width: 0;">
               <div class="run-title">\${h(started && started.workspace || 'Workspace review')}</div>
+              <div class="run-subtitle">\${h(run.id)}</div>
               <div class="badge-group">
                 <span class="badge \${h(status)}">\${statusIcon}\${h(status)}</span>
                 <span class="badge \${h(verdict)}">\${verdictIcon}\${h(verdict)}</span>
@@ -1485,7 +1710,7 @@ export function renderMonitorHtml(): string {
         runCountEl.textContent = String(runs.length);
         jobCountEl.textContent = String(jobs.length);
         diagnosticsEl.innerHTML = renderDiagnostics(data.diagnostics);
-        jobsEl.innerHTML = jobs.length ? jobs.map(renderJob).join('') : '<div class="empty">No Codex jobs found for this workspace.</div>';
+        jobsEl.innerHTML = jobs.length ? jobs.map((job, index) => renderJob(job, index === 0)).join('') : '<div class="empty">No Codex jobs found for this workspace.</div>';
         runsEl.innerHTML = runs.length ? runs.map((run, index) => renderRun(run, index === 0)).join('') : '<div class="empty">No review gate runs recorded yet.</div>';
       } finally {
         loading = false;
@@ -1546,6 +1771,20 @@ export function renderMonitorHtml(): string {
     const sidebarState = safeGetItem('sidebar-collapsed');
     setSidebarCollapsed(sidebarState === 'true');
 
+    function setCodexJobsCollapsed(collapsed) {
+      codexJobsSection.classList.toggle('section-collapsed', collapsed);
+      codexJobsToggle.setAttribute('aria-expanded', String(!collapsed));
+      safeSetItem('codex-jobs-collapsed', String(collapsed));
+    }
+
+    const codexJobsState = safeGetItem('codex-jobs-collapsed');
+    setCodexJobsCollapsed(codexJobsState === 'true');
+
+    codexJobsToggle.addEventListener('click', () => {
+      const currentCollapsed = codexJobsSection.classList.contains('section-collapsed');
+      setCodexJobsCollapsed(!currentCollapsed);
+    });
+
     toggleSidebarBtn.addEventListener('click', () => {
       const currentCollapsed = layoutContainer.classList.contains('sidebar-collapsed');
       setSidebarCollapsed(!currentCollapsed);
@@ -1574,6 +1813,19 @@ export function renderMonitorHtml(): string {
       } else {
         runEl.classList.add('run-collapsed');
         safeSetItem('run-collapsed-' + runId, 'true');
+      }
+    };
+
+    globalObj.toggleJobCollapse = function(jobId) {
+      const jobEl = document.getElementById(domId('job', jobId));
+      if (!jobEl) return;
+      const isCollapsed = jobEl.classList.contains('run-collapsed');
+      if (isCollapsed) {
+        jobEl.classList.remove('run-collapsed');
+        safeSetItem('job-collapsed-' + jobId, 'false');
+      } else {
+        jobEl.classList.add('run-collapsed');
+        safeSetItem('job-collapsed-' + jobId, 'true');
       }
     };
 

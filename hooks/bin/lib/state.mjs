@@ -14,8 +14,17 @@ export function dataRoot() {
         path.join(os.homedir(), ".gemini", "antigravity-cli", "antigravity-codex"));
 }
 const workspaceRootCache = new Map();
+function canonicalPath(candidate) {
+    const resolved = path.resolve(candidate);
+    try {
+        return fs.realpathSync(resolved);
+    }
+    catch {
+        return resolved;
+    }
+}
 export function resolveWorkspaceRoot(cwd = process.cwd()) {
-    const resolved = path.resolve(cwd);
+    const resolved = canonicalPath(cwd);
     const cached = workspaceRootCache.get(resolved);
     if (cached) {
         return cached;
@@ -36,7 +45,7 @@ export function resolveWorkspaceRoot(cwd = process.cwd()) {
     }
     let workspaceRoot = resolved;
     if (foundRoot) {
-        workspaceRoot = foundRoot;
+        workspaceRoot = canonicalPath(foundRoot);
     }
     else {
         const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
@@ -45,14 +54,14 @@ export function resolveWorkspaceRoot(cwd = process.cwd()) {
             windowsHide: true
         });
         if (result.status === 0 && result.stdout?.trim()) {
-            workspaceRoot = path.resolve(result.stdout.trim());
+            workspaceRoot = canonicalPath(result.stdout.trim());
         }
     }
     workspaceRootCache.set(resolved, workspaceRoot);
     return workspaceRoot;
 }
 function workspaceKey(workspaceRoot) {
-    return createHash("sha256").update(path.resolve(workspaceRoot).toLowerCase()).digest("hex").slice(0, 16);
+    return createHash("sha256").update(canonicalPath(workspaceRoot).toLowerCase()).digest("hex").slice(0, 16);
 }
 function resolveWorkspacePaths(cwd = process.cwd()) {
     const workspaceRoot = resolveWorkspaceRoot(cwd);
@@ -178,7 +187,7 @@ export function readConfig(cwd = process.cwd()) {
 }
 const reviewGateEnabledCache = new Map();
 export function isReviewGateEnabled(cwd = process.cwd()) {
-    const resolved = path.resolve(cwd);
+    const resolved = resolveWorkspaceRoot(cwd);
     const cached = reviewGateEnabledCache.get(resolved);
     if (cached !== undefined) {
         return cached;
@@ -188,7 +197,7 @@ export function isReviewGateEnabled(cwd = process.cwd()) {
     return enabled;
 }
 export function setReviewGateEnabled(cwd, enabled) {
-    const resolved = path.resolve(cwd);
+    const resolved = resolveWorkspaceRoot(cwd);
     reviewGateEnabledCache.set(resolved, enabled);
     const state = readState(resolved);
     return writeState(resolved, {

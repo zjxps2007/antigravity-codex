@@ -12,11 +12,13 @@ import {
   readReviewGateEvents,
   reviewGateEventsFile,
   writeMonitorState,
+  type ReviewGateFinding,
   type MonitorState
 } from "./review-gate-events.mjs";
+import { readReviewResultForJob } from "./review-result.mjs";
 import { renderMonitorHtml } from "./monitor-template.mjs";
 import { CliOptions } from "./request-builders.mjs";
-import { listJobs, clearJobs, type Job } from "./state.mjs";
+import { listJobs, clearJobs, resolveWorkspaceRoot, type Job } from "./state.mjs";
 
 const DEFAULT_MONITOR_HOST = "127.0.0.1";
 const DEFAULT_MONITOR_PORT = 8765;
@@ -39,6 +41,10 @@ interface MonitorJob {
   createdAt?: string;
   updatedAt?: string;
   completedAt?: string;
+  reviewVerdict?: string;
+  reviewSummary?: string;
+  reviewFindings?: ReviewGateFinding[];
+  reviewNextSteps?: string[];
 }
 
 export function normalizeMonitorHost(value: string | undefined): string {
@@ -169,6 +175,7 @@ function readFileTail(file: string | undefined, maxBytes = MAX_LOG_TAIL_BYTES): 
 }
 
 function monitorJob(job: Job): MonitorJob {
+  const reviewResult = readReviewResultForJob(job);
   return {
     id: job.id,
     kind: job.kind,
@@ -183,7 +190,11 @@ function monitorJob(job: Job): MonitorJob {
     signal: job.signal,
     createdAt: job.createdAt,
     updatedAt: job.updatedAt,
-    completedAt: job.completedAt
+    completedAt: job.completedAt,
+    reviewVerdict: reviewResult?.verdict,
+    reviewSummary: reviewResult?.summary,
+    reviewFindings: reviewResult?.findings,
+    reviewNextSteps: reviewResult?.nextSteps
   };
 }
 
@@ -205,8 +216,9 @@ export function handleMonitorRequest(
     }
     if (request.method === "GET" && url.pathname === "/api/events") {
       const limit = Number(url.searchParams.get("limit") ?? 200);
+      const workspaceRoot = resolveWorkspaceRoot(process.cwd());
       sendJson(response, 200, {
-        events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200),
+        events: readReviewGateEvents(Number.isInteger(limit) && limit > 0 ? Math.min(limit, 1000) : 200, workspaceRoot),
         jobs: listJobs(process.cwd()).slice(0, 20).map(monitorJob),
         diagnostics: buildDoctorReport(process.cwd(), { rootDir: ROOT_DIR, checkExecutables: false }),
         eventsFile: reviewGateEventsFile(),
@@ -215,7 +227,7 @@ export function handleMonitorRequest(
       return;
     }
     if (request.method === "DELETE" && url.pathname === "/api/events") {
-      clearReviewGateEvents();
+      clearReviewGateEvents(resolveWorkspaceRoot(process.cwd()));
       clearJobs(process.cwd());
       sendJson(response, 200, { cleared: true, eventsFile: reviewGateEventsFile() });
       return;
@@ -416,7 +428,7 @@ export async function handleMonitor(
   const asJson = options.json === true;
 
   if (options.clear === true) {
-    clearReviewGateEvents();
+    clearReviewGateEvents(resolveWorkspaceRoot(process.cwd()));
     clearJobs(process.cwd());
     if (asJson) {
       console.log(JSON.stringify({ cleared: true, eventsFile: reviewGateEventsFile() }, null, 2));

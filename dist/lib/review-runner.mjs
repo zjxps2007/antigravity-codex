@@ -9,8 +9,16 @@ import { parseReviewPayload } from "./review-parser.mjs";
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = resolveRuntimeRoot(SCRIPT_DIR);
 export const REVIEW_SCHEMA = path.join(ROOT_DIR, "schemas", "review-output.schema.json");
+const DEFAULT_REVIEW_TIMEOUT_MS = 120_000;
 function codexCommand() {
     return process.env.CODEX_BIN?.trim() || "codex";
+}
+function reviewTimeoutMs() {
+    const raw = process.env.AGY_CODEX_REVIEW_TIMEOUT_MS?.trim();
+    if (!raw)
+        return DEFAULT_REVIEW_TIMEOUT_MS;
+    const timeout = Number(raw);
+    return Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_REVIEW_TIMEOUT_MS;
 }
 function reviewPrompt() {
     return [
@@ -23,6 +31,7 @@ function reviewPrompt() {
     ].join("\n");
 }
 export function runCodexReview(cwd) {
+    const timeoutMs = reviewTimeoutMs();
     const outputFile = path.join(os.tmpdir(), `agy-codex-review-gate-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
     const args = [
         "--ask-for-approval",
@@ -40,7 +49,8 @@ export function runCodexReview(cwd) {
         cwd,
         encoding: "utf8",
         windowsHide: true,
-        timeout: 240_000,
+        timeout: timeoutMs,
+        killSignal: "SIGKILL",
         env: { ...process.env, NO_COLOR: "1", AGY_CODEX_REVIEW_GATE: "1" }
     });
     const lastMessage = fs.existsSync(outputFile)
@@ -52,10 +62,15 @@ export function runCodexReview(cwd) {
     catch {
         // Best effort cleanup.
     }
+    const errorMessage = result.error
+        ? `Codex review gate process error: ${result.error.message}\n`
+        : "";
     return {
         payload: parseReviewPayload(lastMessage || result.stdout),
         stdout: result.stdout ?? "",
-        stderr: result.stderr ?? "",
-        status: result.status
+        stderr: `${result.stderr ?? ""}${errorMessage}`,
+        status: result.status,
+        timedOut: result.error?.code === "ETIMEDOUT",
+        timeoutMs
     };
 }

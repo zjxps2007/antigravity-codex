@@ -16,10 +16,21 @@ export interface ReviewRunResult {
   stdout: string;
   stderr: string;
   status: number | null;
+  timedOut: boolean;
+  timeoutMs: number;
 }
+
+const DEFAULT_REVIEW_TIMEOUT_MS = 120_000;
 
 function codexCommand(): string {
   return process.env.CODEX_BIN?.trim() || "codex";
+}
+
+function reviewTimeoutMs(): number {
+  const raw = process.env.AGY_CODEX_REVIEW_TIMEOUT_MS?.trim();
+  if (!raw) return DEFAULT_REVIEW_TIMEOUT_MS;
+  const timeout = Number(raw);
+  return Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_REVIEW_TIMEOUT_MS;
 }
 
 function reviewPrompt(): string {
@@ -34,6 +45,7 @@ function reviewPrompt(): string {
 }
 
 export function runCodexReview(cwd: string): ReviewRunResult {
+  const timeoutMs = reviewTimeoutMs();
   const outputFile = path.join(
     os.tmpdir(),
     `agy-codex-review-gate-${Date.now()}-${Math.random().toString(16).slice(2)}.json`
@@ -54,7 +66,8 @@ export function runCodexReview(cwd: string): ReviewRunResult {
     cwd,
     encoding: "utf8",
     windowsHide: true,
-    timeout: 240_000,
+    timeout: timeoutMs,
+    killSignal: "SIGKILL",
     env: { ...process.env, NO_COLOR: "1", AGY_CODEX_REVIEW_GATE: "1" }
   });
 
@@ -67,10 +80,16 @@ export function runCodexReview(cwd: string): ReviewRunResult {
     // Best effort cleanup.
   }
 
+  const errorMessage = result.error
+    ? `Codex review gate process error: ${result.error.message}\n`
+    : "";
+
   return {
     payload: parseReviewPayload(lastMessage || result.stdout),
     stdout: result.stdout ?? "",
-    stderr: result.stderr ?? "",
-    status: result.status
+    stderr: `${result.stderr ?? ""}${errorMessage}`,
+    status: result.status,
+    timedOut: (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT",
+    timeoutMs
   };
 }

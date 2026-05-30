@@ -9,7 +9,13 @@ import { normalizeMonitorHost } from "../dist/lib/monitor-server.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const companion = path.join(repoRoot, "dist", "agy-codex.mjs");
 
-function makeFakeCodex(): { script: string; dataRoot: string; antigravityConfigDir: string; workspace: string } {
+function makeFakeCodex(): {
+  script: string;
+  dataRoot: string;
+  antigravityConfigDir: string;
+  antigravityCliRoot: string;
+  workspace: string;
+} {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-cli-test-"));
   const script = path.join(tempRoot, "fake-codex.js");
   fs.writeFileSync(script, "console.log(JSON.stringify(process.argv.slice(2)));\n");
@@ -17,6 +23,7 @@ function makeFakeCodex(): { script: string; dataRoot: string; antigravityConfigD
     script,
     dataRoot: path.join(tempRoot, "data"),
     antigravityConfigDir: path.join(tempRoot, "gemini-config"),
+    antigravityCliRoot: path.join(tempRoot, "antigravity-cli"),
     workspace: fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-work-"))
   };
 }
@@ -30,6 +37,7 @@ function runCompanion(args: string[]) {
       ...process.env,
       AGY_CODEX_DATA: fake.dataRoot,
       AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+      AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
       CODEX_BIN: fake.script
     }
   });
@@ -63,6 +71,7 @@ test("monitor status reports stopped without a running server", () => {
       ...process.env,
       AGY_CODEX_DATA: fake.dataRoot,
       AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+      AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
       CODEX_BIN: fake.script
     }
   });
@@ -92,6 +101,7 @@ test("monitor clear removes stored review gate events", () => {
       ...process.env,
       AGY_CODEX_DATA: fake.dataRoot,
       AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+      AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
       CODEX_BIN: fake.script
     }
   });
@@ -99,6 +109,39 @@ test("monitor clear removes stored review gate events", () => {
   const payload = JSON.parse(result.stdout) as { cleared: boolean };
   assert.equal(payload.cleared, true);
   assert.equal(fs.existsSync(eventsFile), false);
+});
+
+test("monitor clear keeps review gate events from other workspaces", () => {
+  const fake = makeFakeCodex();
+  const otherWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-other-work-"));
+  const eventsDir = path.join(fake.dataRoot, "review-gate");
+  const eventsFile = path.join(eventsDir, "events.jsonl");
+  fs.mkdirSync(eventsDir, { recursive: true });
+  fs.writeFileSync(
+    eventsFile,
+    [
+      JSON.stringify({ id: "current", workspace: fake.workspace, time: "now", type: "started" }),
+      JSON.stringify({ id: "other", workspace: otherWorkspace, time: "now", type: "started" })
+    ].join("\n") + "\n"
+  );
+
+  const result = spawnSync(process.execPath, [companion, "monitor", "--clear", "--json"], {
+    cwd: fake.workspace,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AGY_CODEX_DATA: fake.dataRoot,
+      AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+      AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
+      CODEX_BIN: fake.script
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { cleared: boolean };
+  assert.equal(payload.cleared, true);
+  const remaining = fs.readFileSync(eventsFile, "utf8");
+  assert.doesNotMatch(remaining, /current/);
+  assert.match(remaining, /other/);
 });
 
 test("setup stores review gate config outside hooks manifest", () => {
@@ -115,6 +158,7 @@ test("setup stores review gate config outside hooks manifest", () => {
         ...process.env,
         AGY_CODEX_DATA: fake.dataRoot,
         AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+        AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
         CODEX_BIN: fake.script
       }
     }
@@ -138,9 +182,50 @@ test("setup stores review gate config outside hooks manifest", () => {
   assert.equal(fs.readFileSync(hooksFile, "utf8"), hooksBefore);
 });
 
+test("setup activates imported plugin stop hooks with the local command", () => {
+  const fake = makeFakeCodex();
+  const importedHook = {
+    "codex-stop-review-gate": {
+      enabled: false,
+      Stop: [{ type: "command", command: "npx -y --package github:zjxps2007/antigravity-codex agy-codex-review-gate", timeout: 300 }]
+    }
+  };
+  const configPluginHooks = path.join(fake.antigravityConfigDir, "plugins", "codex", "hooks.json");
+  const cliPluginHooks = path.join(fake.antigravityCliRoot, "plugins", "codex", "hooks.json");
+  for (const file of [configPluginHooks, cliPluginHooks]) {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${JSON.stringify(importedHook, null, 2)}\n`);
+  }
+
+  const result = spawnSync(process.execPath, [companion, "setup", "--enable-review-gate", "--json", "--cwd", fake.workspace], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      AGY_CODEX_DATA: fake.dataRoot,
+      AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+      AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
+      CODEX_BIN: fake.script
+    }
+  });
+  assert.equal(result.status, 0, result.stderr);
+
+  for (const file of [configPluginHooks, cliPluginHooks]) {
+    const hooks = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, {
+      enabled: boolean;
+      Stop: Array<{ command: string; timeout: number }>;
+    }>;
+    assert.equal(hooks["codex-stop-review-gate"]?.enabled, true);
+    assert.match(hooks["codex-stop-review-gate"]?.Stop[0]?.command ?? "", /stop-review-gate-hook\.mjs/);
+    assert.equal(hooks["codex-stop-review-gate"]?.Stop[0]?.timeout, 300);
+  }
+});
+
 test("setup preserves unrelated active hooks and removes only codex hook on disable", () => {
   const fake = makeFakeCodex();
   const activeHooksFile = path.join(fake.antigravityConfigDir, "hooks.json");
+  const configPluginHooks = path.join(fake.antigravityConfigDir, "plugins", "codex", "hooks.json");
+  const cliPluginHooks = path.join(fake.antigravityCliRoot, "plugins", "codex", "hooks.json");
   fs.mkdirSync(fake.antigravityConfigDir, { recursive: true });
   fs.writeFileSync(
     activeHooksFile,
@@ -165,6 +250,7 @@ test("setup preserves unrelated active hooks and removes only codex hook on disa
         ...process.env,
         AGY_CODEX_DATA: fake.dataRoot,
         AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+        AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
         CODEX_BIN: fake.script
       }
     }
@@ -184,6 +270,7 @@ test("setup preserves unrelated active hooks and removes only codex hook on disa
         ...process.env,
         AGY_CODEX_DATA: fake.dataRoot,
         AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+        AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
         CODEX_BIN: fake.script
       }
     }
@@ -192,6 +279,53 @@ test("setup preserves unrelated active hooks and removes only codex hook on disa
   const afterDisable = JSON.parse(fs.readFileSync(activeHooksFile, "utf8")) as Record<string, unknown>;
   assert.ok(afterDisable["other-stop-hook"]);
   assert.equal(afterDisable["codex-stop-review-gate"], undefined);
+
+  for (const file of [configPluginHooks, cliPluginHooks]) {
+    const hooks = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, { enabled: boolean }>;
+    assert.equal(hooks["codex-stop-review-gate"]?.enabled, false);
+  }
+});
+
+test("setup disable keeps active hook while another workspace remains enabled", () => {
+  const fake = makeFakeCodex();
+  const otherWorkspace = fs.mkdtempSync(path.join(os.tmpdir(), "agy-codex-work-"));
+  const activeHooksFile = path.join(fake.antigravityConfigDir, "hooks.json");
+  const env = {
+    ...process.env,
+    AGY_CODEX_DATA: fake.dataRoot,
+    AGY_CODEX_ANTIGRAVITY_CONFIG_DIR: fake.antigravityConfigDir,
+    AGY_CODEX_ANTIGRAVITY_CLI_ROOT: fake.antigravityCliRoot,
+    CODEX_BIN: fake.script
+  };
+
+  for (const workspace of [fake.workspace, otherWorkspace]) {
+    const enable = spawnSync(
+      process.execPath,
+      [companion, "setup", "--enable-review-gate", "--json", "--cwd", workspace],
+      { cwd: repoRoot, encoding: "utf8", env }
+    );
+    assert.equal(enable.status, 0, enable.stderr);
+  }
+
+  const disableOne = spawnSync(
+    process.execPath,
+    [companion, "setup", "--disable-review-gate", "--json", "--cwd", fake.workspace],
+    { cwd: repoRoot, encoding: "utf8", env }
+  );
+  assert.equal(disableOne.status, 0, disableOne.stderr);
+  const payload = JSON.parse(disableOne.stdout) as { reviewGate: { enabled: boolean; activeHookInstalled: boolean } };
+  assert.equal(payload.reviewGate.enabled, false);
+  assert.equal(payload.reviewGate.activeHookInstalled, true);
+
+  const afterDisableOne = JSON.parse(fs.readFileSync(activeHooksFile, "utf8")) as Record<string, unknown>;
+  assert.ok(afterDisableOne["codex-stop-review-gate"]);
+  for (const file of [
+    path.join(fake.antigravityConfigDir, "plugins", "codex", "hooks.json"),
+    path.join(fake.antigravityCliRoot, "plugins", "codex", "hooks.json")
+  ]) {
+    const hooks = JSON.parse(fs.readFileSync(file, "utf8")) as Record<string, { enabled: boolean }>;
+    assert.equal(hooks["codex-stop-review-gate"]?.enabled, true);
+  }
 });
 
 test("doctor reports diagnostics as json", () => {

@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -7,6 +8,8 @@ import {
   appendReviewGateEvent,
   createReviewGateRunId,
   nowIso,
+  readReviewGateEvents,
+  reviewGateDir,
   type ReviewGateEvent
 } from "./lib/review-gate-events.mjs";
 import { formatReason, parseReviewPayload, type ReviewGatePayload } from "./lib/review-parser.mjs";
@@ -21,6 +24,8 @@ interface StopHookInput {
   artifactDirectoryPath?: string;
   transcriptPath?: string;
 }
+
+const STALE_STOP_HOOK_LOCK_MS = 5 * 60 * 1000;
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -90,6 +95,17 @@ function reviewWorkspace(input: StopHookInput): string {
   if (directEnabled) {
     return directEnabled;
   }
+  const directGitWorkspace = directWorkspaces.find((candidate) => {
+    const result = spawnSync("git", ["rev-parse", "--is-inside-work-tree"], {
+      cwd: candidate,
+      encoding: "utf8",
+      windowsHide: true
+    });
+    return result.status === 0 && result.stdout.trim() === "true";
+  });
+  if (directGitWorkspace) {
+    return directGitWorkspace;
+  }
   return listReviewGateEnabledWorkspaces()[0] ?? directWorkspaces[0] ?? process.cwd();
 }
 
@@ -138,6 +154,22 @@ function extractUserRequest(content: string): string {
   return (match?.[1] ?? content).trim();
 }
 
+function transcriptContentText(content: unknown): string | null {
+  if (typeof content === "string") {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    const parts = content.flatMap((item) => {
+      if (typeof item === "string") return [item];
+      if (typeof item !== "object" || item === null) return [];
+      const record = item as Record<string, unknown>;
+      return [record.text, record.content].filter((value): value is string => typeof value === "string");
+    });
+    return parts.length ? parts.join("\n") : null;
+  }
+  return null;
+}
+
 function latestUserRequest(input: StopHookInput): string | null {
   for (const transcript of transcriptCandidates(input)) {
     const content = readFileTail(transcript);
@@ -146,9 +178,12 @@ function latestUserRequest(input: StopHookInput): string | null {
     for (const line of lines) {
       try {
         const entry = JSON.parse(line) as { source?: string; type?: string; content?: unknown };
-        if (entry.type !== "USER_INPUT" || typeof entry.content !== "string") continue;
-        if (entry.source && !entry.source.startsWith("USER")) continue;
-        return extractUserRequest(entry.content);
+        if (entry.type !== "USER_INPUT") continue;
+        const source = entry.source?.toUpperCase();
+        if (source && !source.startsWith("USER")) continue;
+        const text = transcriptContentText(entry.content);
+        if (!text) continue;
+        return extractUserRequest(text);
       } catch {
         // Ignore malformed transcript lines.
       }
@@ -161,10 +196,149 @@ function isCodexSlashCommandSession(input: StopHookInput): boolean {
   return /^\/codex(?::|$)/.test(latestUserRequest(input) ?? "");
 }
 
+function findingFingerprint(payload: ReviewGatePayload): string {
+  const findings = (payload.findings ?? []).map((finding) => ({
+    severity: finding.severity ?? "",
+    title: finding.title ?? "",
+    file: finding.file ?? "",
+    line: finding.line ?? null,
+    description: finding.description ?? "",
+    recommendation: finding.recommendation ?? ""
+  }));
+  return JSON.stringify({
+    verdict: payload.verdict ?? "",
+    summary: payload.summary ?? "",
+    findings,
+    nextSteps: payload.next_steps ?? []
+  });
+}
+
+function safeRealpath(candidate: string): string {
+  try {
+    return fs.realpathSync(candidate);
+  } catch {
+    return path.resolve(candidate);
+  }
+}
+
+function isRepeatedContinue(cwd: string, payload: ReviewGatePayload): boolean {
+  const fingerprint = findingFingerprint(payload);
+  const workspace = safeRealpath(cwd);
+  const recentEvents = readReviewGateEvents(80, workspace).reverse();
+  return recentEvents.some((event) => {
+    if (event.type !== "decision" || event.decision !== "continue") return false;
+    if (!event.workspace || safeRealpath(event.workspace) !== workspace) return false;
+    const previousPayload = event.payload as ReviewGatePayload | undefined;
+    if (!previousPayload) return false;
+    return findingFingerprint(previousPayload) === fingerprint;
+  });
+}
+
+function normalizedPath(value: string | undefined): string {
+  return value ? path.resolve(value) : "";
+}
+
+function stopHookFingerprint(input: StopHookInput, cwd: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify({
+      workspace: safeRealpath(cwd),
+      terminationReason: input.terminationReason ?? "",
+      error: input.error ?? "",
+      fullyIdle: input.fullyIdle ?? null,
+      artifactDirectoryPath: normalizedPath(input.artifactDirectoryPath),
+      transcriptPath: normalizedPath(input.transcriptPath),
+      userRequest: latestUserRequest(input) ?? ""
+    }))
+    .digest("hex");
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error
+      ? (error as { code?: unknown }).code
+      : null;
+    return code === "EPERM";
+  }
+}
+
+function acquireStopHookInvocation(input: StopHookInput, cwd: string): boolean {
+  try {
+    const locksDir = path.join(reviewGateDir(), "locks");
+    fs.mkdirSync(locksDir, { recursive: true });
+
+    const now = Date.now();
+    for (const entry of fs.readdirSync(locksDir)) {
+      if (!entry.startsWith("stop-") || !entry.endsWith(".json")) continue;
+      const file = path.join(locksDir, entry);
+      try {
+        const stat = fs.statSync(file);
+        if (now - stat.mtimeMs > STALE_STOP_HOOK_LOCK_MS) {
+          fs.rmSync(file, { force: true });
+        }
+      } catch {
+        // Best effort stale-lock cleanup.
+      }
+    }
+
+    const lockFile = path.join(locksDir, `stop-${stopHookFingerprint(input, cwd)}.json`);
+    const tryCreate = (): boolean | null => {
+      try {
+        const fd = fs.openSync(lockFile, "wx");
+        try {
+          fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, time: nowIso(), workspace: safeRealpath(cwd) }));
+        } finally {
+          fs.closeSync(fd);
+        }
+        return true;
+      } catch (error) {
+        const code = typeof error === "object" && error !== null && "code" in error
+          ? (error as { code?: unknown }).code
+          : null;
+        if (code !== "EEXIST") {
+          return true;
+        }
+        return null;
+      }
+    };
+
+    const created = tryCreate();
+    if (created !== null) return created;
+
+    const stat = fs.statSync(lockFile);
+    if (now - stat.mtimeMs < STALE_STOP_HOOK_LOCK_MS) {
+      try {
+        const lock = JSON.parse(fs.readFileSync(lockFile, "utf8")) as { pid?: unknown };
+        if (typeof lock.pid === "number" && isProcessAlive(lock.pid)) {
+          return false;
+        }
+      } catch {
+        return false;
+      }
+    }
+
+    fs.rmSync(lockFile, { force: true });
+    return tryCreate() ?? true;
+  } catch {
+    return true;
+  }
+}
+
 async function main(): Promise<void> {
   const input = parseInput(await readStdin());
   const cwd = reviewWorkspace(input);
   if (!isReviewGateEnabled(cwd)) {
+    allow();
+    return;
+  }
+
+  if (isCodexSlashCommandSession(input)) {
+    allow();
+    return;
+  }
+  if (!acquireStopHookInvocation(input, cwd)) {
     allow();
     return;
   }
@@ -215,11 +389,6 @@ async function main(): Promise<void> {
     finishAllow("Bypassed by AGY_CODEX_REVIEW_GATE_BYPASS.");
     return;
   }
-  if (isCodexSlashCommandSession(input)) {
-    recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Skipped for explicit /codex command session." });
-    finishAllow("Skipped for explicit /codex command session.");
-    return;
-  }
   if (input.fullyIdle === false || input.terminationReason === "error") {
     recordEvent({ ...baseEvent, time: nowIso(), type: "skipped", message: "Stop hook was not a fully idle normal stop." });
     finishAllow("Stop hook was not a fully idle normal stop.");
@@ -247,17 +416,20 @@ async function main(): Promise<void> {
   });
 
   if (review.status !== 0) {
+    const failureMessage = review.timedOut
+      ? `Codex review gate timed out after ${Math.round(review.timeoutMs / 1000)}s.`
+      : "Codex review gate command failed.";
     process.stderr.write(review.stderr || review.stdout);
     recordEvent({
       ...baseEvent,
       time: nowIso(),
       type: "error",
       status: review.status,
-      message: "Codex review gate command failed.",
+      message: failureMessage,
       stdout: review.stdout,
       stderr: review.stderr
     });
-    finishAllow("Codex review gate command failed.", review.payload);
+    finishAllow(failureMessage, review.payload);
     return;
   }
 
@@ -267,6 +439,26 @@ async function main(): Promise<void> {
       payload ? "Codex approved the changes." : "Codex review gate output could not be parsed.",
       payload
     );
+    return;
+  }
+
+  const loopGuardMessage = isRepeatedContinue(cwd, payload)
+    ? "Repeated needs-attention verdict; allowing to avoid a review-gate loop."
+    : "";
+
+  if (loopGuardMessage) {
+    recordEvent({
+      ...baseEvent,
+      time: nowIso(),
+      type: "skipped",
+      verdict: payload.verdict,
+      summary: payload.summary,
+      findings: payload.findings,
+      nextSteps: payload.next_steps,
+      message: loopGuardMessage,
+      payload
+    });
+    finishAllow(loopGuardMessage, payload);
     return;
   }
 

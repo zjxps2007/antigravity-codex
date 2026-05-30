@@ -19,6 +19,17 @@ export interface ActiveReviewGateHookInfo {
   error: string | null;
 }
 
+export interface ImportedReviewGateHookInfo {
+  hooksFile: string;
+  exists: boolean;
+  installed: boolean;
+  enabled: boolean | null;
+  disabled: boolean;
+  command: string | null;
+  timeout: number | null;
+  error: string | null;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -31,6 +42,19 @@ export function antigravityConfigDir(): string {
 
 export function antigravityHooksFile(): string {
   return path.join(antigravityConfigDir(), "hooks.json");
+}
+
+export function antigravityCliRoot(): string {
+  return path.resolve(
+    process.env.AGY_CODEX_ANTIGRAVITY_CLI_ROOT ?? path.join(os.homedir(), ".gemini", "antigravity-cli")
+  );
+}
+
+function importedReviewGateHookFiles(): string[] {
+  return Array.from(new Set([
+    path.join(antigravityConfigDir(), "plugins", "codex", "hooks.json"),
+    path.join(antigravityCliRoot(), "plugins", "codex", "hooks.json")
+  ]));
 }
 
 function readHooksObject(file: string): Record<string, unknown> {
@@ -131,7 +155,71 @@ export function inspectActiveReviewGateHook(): ActiveReviewGateHookInfo {
   }
 }
 
+function inspectImportedReviewGateHook(hooksFile: string): ImportedReviewGateHookInfo {
+  if (!fs.existsSync(hooksFile)) {
+    return {
+      hooksFile,
+      exists: false,
+      installed: false,
+      enabled: null,
+      disabled: false,
+      command: null,
+      timeout: null,
+      error: null
+    };
+  }
+
+  try {
+    const hooks = readHooksObject(hooksFile);
+    const entry = readHookEntry(hooks);
+    return {
+      hooksFile,
+      exists: true,
+      installed: Boolean(entry.command && entry.enabled !== false),
+      enabled: entry.enabled,
+      disabled: entry.enabled === false,
+      command: entry.command,
+      timeout: entry.timeout,
+      error: null
+    };
+  } catch (error) {
+    return {
+      hooksFile,
+      exists: true,
+      installed: false,
+      enabled: null,
+      disabled: false,
+      command: null,
+      timeout: null,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+export function inspectImportedReviewGateHooks(): ImportedReviewGateHookInfo[] {
+  return importedReviewGateHookFiles().map((hooksFile) => inspectImportedReviewGateHook(hooksFile));
+}
+
+export function installImportedReviewGateHooks(rootDir: string): ImportedReviewGateHookInfo[] {
+  return importedReviewGateHookFiles().map((hooksFile) => {
+    const hooks = readHooksObject(hooksFile);
+    hooks[REVIEW_GATE_HOOK_NAME] = {
+      enabled: true,
+      Stop: [
+        {
+          type: "command",
+          command: buildActiveReviewGateHookCommand(rootDir),
+          timeout: REVIEW_GATE_HOOK_TIMEOUT_SECONDS
+        }
+      ]
+    };
+    writeHooksObject(hooksFile, hooks);
+    return inspectImportedReviewGateHook(hooksFile);
+  });
+}
+
 export function installActiveReviewGateHook(rootDir: string): ActiveReviewGateHookInfo {
+  installImportedReviewGateHooks(rootDir);
   const hooksFile = antigravityHooksFile();
   const hooks = readHooksObject(hooksFile);
   hooks[REVIEW_GATE_HOOK_NAME] = {
@@ -146,6 +234,43 @@ export function installActiveReviewGateHook(rootDir: string): ActiveReviewGateHo
   };
   writeHooksObject(hooksFile, hooks);
   return inspectActiveReviewGateHook();
+}
+
+export function disableImportedReviewGateHooks(): ImportedReviewGateHookInfo[] {
+  return importedReviewGateHookFiles().map((hooksFile) => {
+    if (!fs.existsSync(hooksFile)) {
+      return inspectImportedReviewGateHook(hooksFile);
+    }
+
+    try {
+      const hooks = readHooksObject(hooksFile);
+      const hook = hooks[REVIEW_GATE_HOOK_NAME];
+      if (!isRecord(hook)) {
+        return inspectImportedReviewGateHook(hooksFile);
+      }
+
+      if (hook.enabled !== false) {
+        hooks[REVIEW_GATE_HOOK_NAME] = {
+          ...hook,
+          enabled: false
+        };
+        writeHooksObject(hooksFile, hooks);
+      }
+
+      return inspectImportedReviewGateHook(hooksFile);
+    } catch (error) {
+      return {
+        hooksFile,
+        exists: true,
+        installed: false,
+        enabled: null,
+        disabled: false,
+        command: null,
+        timeout: null,
+        error: error instanceof Error ? error.message : String(error)
+      };
+    }
+  });
 }
 
 export function removeActiveReviewGateHook(): ActiveReviewGateHookInfo {

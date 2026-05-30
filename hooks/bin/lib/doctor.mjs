@@ -3,13 +3,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { inspectActiveReviewGateHook } from "./antigravity-hooks.mjs";
+import { antigravityCliRoot, inspectActiveReviewGateHook, inspectImportedReviewGateHooks } from "./antigravity-hooks.mjs";
 import { commandAvailable, codexAvailable } from "./exec-resolver.mjs";
 import { readReviewGateEvents, reviewGateEventsFile } from "./review-gate-events.mjs";
 import { isReviewGateEnabled, resolveWorkspaceRoot, setReviewGateEnabled, workspaceStateDir } from "./state.mjs";
-function antigravityCliRoot() {
-    return path.join(os.homedir(), ".gemini", "antigravity-cli");
-}
 function readJsonObject(file) {
     try {
         if (!fs.existsSync(file))
@@ -43,6 +40,7 @@ function inspectAntigravity() {
     });
     const command = typeof commandEntry?.command === "string" ? commandEntry.command : null;
     const enabled = typeof stopHookObject?.enabled === "boolean" ? stopHookObject.enabled : null;
+    const importedHooks = inspectImportedReviewGateHooks();
     return {
         cliRoot,
         importManifestFile,
@@ -53,7 +51,9 @@ function inspectAntigravity() {
         installedHooksFile,
         installedHooksFileExists: fs.existsSync(installedHooksFile),
         installedHookCommand: command,
-        installedHookEnabled: enabled
+        installedHookEnabled: enabled,
+        importedHooks,
+        importedHookInstalled: importedHooks.some((hook) => hook.installed)
     };
 }
 function inspectGit(cwd) {
@@ -91,7 +91,7 @@ function inspectGit(cwd) {
 }
 function inspectReviewGate(cwd) {
     const workspaceRoot = resolveWorkspaceRoot(cwd);
-    const events = readReviewGateEvents(1000).filter((event) => event.workspace && path.resolve(event.workspace) === workspaceRoot);
+    const events = readReviewGateEvents(1000, workspaceRoot);
     const eventsFile = reviewGateEventsFile();
     return {
         enabled: isReviewGateEnabled(cwd),
@@ -187,6 +187,22 @@ function runHookSmokeTest(cwd, rootDir, activeHookCommand, installedHookCommand)
 function addCheck(checks, name, status, message) {
     checks.push({ name, status, message });
 }
+function formatImportedHookStatus(hooks) {
+    if (hooks.length === 0)
+        return "no plugin hook files configured";
+    return hooks
+        .map((hook) => {
+        const state = hook.error
+            ? `error: ${hook.error}`
+            : hook.installed
+                ? "enabled"
+                : hook.command
+                    ? "disabled"
+                    : "missing";
+        return `${hook.hooksFile}: ${state}`;
+    })
+        .join("; ");
+}
 function buildChecks(node, codex, git, antigravity, activeHook, reviewGate, hookSmokeTest) {
     const checks = [];
     addCheck(checks, "Node", node ? (node.available ? "pass" : "fail") : "skip", node ? (node.available ? node.stdout : node.error ?? node.stderr ?? "missing") : "not checked");
@@ -201,9 +217,7 @@ function buildChecks(node, codex, git, antigravity, activeHook, reviewGate, hook
     addCheck(checks, "Antigravity import", antigravity.importComponents.includes("hooks") ? "pass" : "fail", antigravity.importManifestExists
         ? `components: ${antigravity.importComponents.join(", ") || "none"}`
         : `missing ${antigravity.importManifestFile}`);
-    addCheck(checks, "Installed Stop hook", antigravity.installedHookCommand && antigravity.installedHookEnabled !== false ? "pass" : "fail", antigravity.installedHooksFileExists
-        ? antigravity.installedHookCommand ?? "codex-stop-review-gate command missing"
-        : `missing ${antigravity.installedHooksFile}`);
+    addCheck(checks, "Installed Stop hook", antigravity.importedHookInstalled ? "pass" : "fail", formatImportedHookStatus(antigravity.importedHooks));
     addCheck(checks, "Active Stop hook", reviewGate.enabled ? (activeHook.installed ? "pass" : "fail") : "skip", reviewGate.enabled
         ? activeHook.error ??
             (activeHook.installed
@@ -212,7 +226,7 @@ function buildChecks(node, codex, git, antigravity, activeHook, reviewGate, hook
         : "not required while Review Gate is disabled");
     addCheck(checks, "Review gate events", reviewGate.eventCount > 0 ? "pass" : "warn", reviewGate.eventCount > 0
         ? `${reviewGate.eventCount} event(s), last ${reviewGate.lastEvent?.time ?? "unknown"}`
-        : `no events at ${reviewGate.eventsFile}`);
+        : `no events for this workspace at ${reviewGate.eventsFile}`);
     if (hookSmokeTest) {
         addCheck(checks, "Manual hook smoke test", hookSmokeTest.status, hookSmokeTest.status === "pass"
             ? `${hookSmokeTest.eventsRecorded} event(s) recorded in isolated data root`
@@ -222,8 +236,11 @@ function buildChecks(node, codex, git, antigravity, activeHook, reviewGate, hook
 }
 function nextStepsFor(git, antigravity, activeHook, reviewGate, hookSmokeTest) {
     const steps = [];
-    if (!antigravity.importComponents.includes("hooks") || !antigravity.installedHookCommand) {
+    if (!antigravity.importComponents.includes("hooks")) {
         steps.push("Reinstall the plugin with `agy plugin uninstall codex` and `agy plugin install https://github.com/zjxps2007/antigravity-codex.git`.");
+    }
+    if (!antigravity.importedHookInstalled) {
+        steps.push("Run `/codex:setup --enable-review-gate` to activate the plugin Stop hook files Antigravity loads.");
     }
     if (!reviewGate.enabled) {
         steps.push("Run `/codex:setup --enable-review-gate` in this workspace.");
@@ -246,8 +263,11 @@ function nextStepsFor(git, antigravity, activeHook, reviewGate, hookSmokeTest) {
     return steps;
 }
 function diagnosisFor(git, antigravity, activeHook, reviewGate, hookSmokeTest) {
-    if (!antigravity.importComponents.includes("hooks") || !antigravity.installedHookCommand) {
+    if (!antigravity.importComponents.includes("hooks")) {
         return "Antigravity has not installed the codex Stop hook.";
+    }
+    if (!antigravity.importedHookInstalled) {
+        return "Antigravity's plugin Stop hook is missing or disabled; automatic Review Gate will not run.";
     }
     if (!reviewGate.enabled) {
         return "Review Gate is disabled for this workspace.";

@@ -102,25 +102,61 @@ export function appendReviewGateEvent(event: ReviewGateEvent): void {
   fs.appendFileSync(reviewGateEventsFile(), `${JSON.stringify(normalizeEvent(event))}\n`);
 }
 
-export function readReviewGateEvents(limit = 200): ReviewGateEvent[] {
+function normalizeWorkspace(value: string): string {
+  try {
+    return fs.realpathSync(value);
+  } catch {
+    return path.resolve(value);
+  }
+}
+
+function eventMatchesWorkspace(event: ReviewGateEvent, workspaceRoot: string | undefined): boolean {
+  if (!workspaceRoot) return true;
+  if (!event.workspace) return false;
+  return normalizeWorkspace(event.workspace) === normalizeWorkspace(workspaceRoot);
+}
+
+export function readReviewGateEvents(limit = 200, workspaceRoot?: string): ReviewGateEvent[] {
   const file = reviewGateEventsFile();
   if (!fs.existsSync(file)) {
     return [];
   }
   const lines = fs.readFileSync(file, "utf8").trimEnd().split(/\r?\n/).filter(Boolean);
   const events: ReviewGateEvent[] = [];
-  for (const line of lines.slice(Math.max(0, lines.length - limit))) {
+  for (let index = lines.length - 1; index >= 0 && events.length < limit; index -= 1) {
     try {
-      events.push(JSON.parse(line) as ReviewGateEvent);
+      const event = JSON.parse(lines[index]!) as ReviewGateEvent;
+      if (eventMatchesWorkspace(event, workspaceRoot)) {
+        events.push(event);
+      }
     } catch {
       // Ignore partial lines from interrupted writes.
     }
   }
-  return events;
+  return events.reverse();
 }
 
-export function clearReviewGateEvents(): void {
+export function clearReviewGateEvents(workspaceRoot?: string): void {
   try {
+    if (workspaceRoot) {
+      const file = reviewGateEventsFile();
+      if (!fs.existsSync(file)) return;
+      const lines = fs.readFileSync(file, "utf8").trimEnd().split(/\r?\n/).filter(Boolean);
+      const kept = lines.filter((line) => {
+        try {
+          const event = JSON.parse(line) as ReviewGateEvent;
+          return event.workspace ? !eventMatchesWorkspace(event, workspaceRoot) : false;
+        } catch {
+          return true;
+        }
+      });
+      if (kept.length) {
+        fs.writeFileSync(file, `${kept.join("\n")}\n`);
+      } else {
+        fs.rmSync(file, { force: true });
+      }
+      return;
+    }
     fs.rmSync(reviewGateEventsFile(), { force: true });
   } catch {
     // Best effort cleanup.

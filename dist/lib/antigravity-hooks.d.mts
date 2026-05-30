@@ -12,10 +12,24 @@ export interface ActiveReviewGateHookInfo {
     timeout: number | null;
     error: string | null;
 }
+export interface ImportedReviewGateHookInfo {
+    hooksFile: string;
+    exists: boolean;
+    installed: boolean;
+    enabled: boolean | null;
+    disabled: boolean;
+    command: string | null;
+    timeout: number | null;
+    error: string | null;
+}
 export declare function antigravityConfigDir(): string;
 export declare function antigravityHooksFile(): string;
+export declare function antigravityCliRoot(): string;
 export declare function findLocalReviewGateHookScript(rootDir: string): string | null;
 export declare function buildActiveReviewGateHookCommand(rootDir: string): string;
 export declare function inspectActiveReviewGateHook(): ActiveReviewGateHookInfo;
+export declare function inspectImportedReviewGateHooks(): ImportedReviewGateHookInfo[];
+export declare function installImportedReviewGateHooks(rootDir: string): ImportedReviewGateHookInfo[];
 export declare function installActiveReviewGateHook(rootDir: string): ActiveReviewGateHookInfo;
+export declare function disableImportedReviewGateHooks(): ImportedReviewGateHookInfo[];
 export declare function removeActiveReviewGateHook(): ActiveReviewGateHookInfo;

@@ -70,8 +70,17 @@ interface WorkspacePaths {
   stateFile: string;
 }
 
+function canonicalPath(candidate: string): string {
+  const resolved = path.resolve(candidate);
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
 export function resolveWorkspaceRoot(cwd = process.cwd()): string {
-  const resolved = path.resolve(cwd);
+  const resolved = canonicalPath(cwd);
   const cached = workspaceRootCache.get(resolved);
   if (cached) {
     return cached;
@@ -93,7 +102,7 @@ export function resolveWorkspaceRoot(cwd = process.cwd()): string {
 
   let workspaceRoot = resolved;
   if (foundRoot) {
-    workspaceRoot = foundRoot;
+    workspaceRoot = canonicalPath(foundRoot);
   } else {
     const result = spawnSync("git", ["rev-parse", "--show-toplevel"], {
       cwd: resolved,
@@ -101,7 +110,7 @@ export function resolveWorkspaceRoot(cwd = process.cwd()): string {
       windowsHide: true
     });
     if (result.status === 0 && result.stdout?.trim()) {
-      workspaceRoot = path.resolve(result.stdout.trim());
+      workspaceRoot = canonicalPath(result.stdout.trim());
     }
   }
 
@@ -110,7 +119,7 @@ export function resolveWorkspaceRoot(cwd = process.cwd()): string {
 }
 
 function workspaceKey(workspaceRoot: string): string {
-  return createHash("sha256").update(path.resolve(workspaceRoot).toLowerCase()).digest("hex").slice(0, 16);
+  return createHash("sha256").update(canonicalPath(workspaceRoot).toLowerCase()).digest("hex").slice(0, 16);
 }
 
 function resolveWorkspacePaths(cwd = process.cwd()): WorkspacePaths {
@@ -249,7 +258,7 @@ export function readConfig(cwd = process.cwd()): CodexConfig {
 const reviewGateEnabledCache = new Map<string, boolean>();
 
 export function isReviewGateEnabled(cwd = process.cwd()): boolean {
-  const resolved = path.resolve(cwd);
+  const resolved = resolveWorkspaceRoot(cwd);
   const cached = reviewGateEnabledCache.get(resolved);
   if (cached !== undefined) {
     return cached;
@@ -260,7 +269,7 @@ export function isReviewGateEnabled(cwd = process.cwd()): boolean {
 }
 
 export function setReviewGateEnabled(cwd: string, enabled: boolean): CodexState {
-  const resolved = path.resolve(cwd);
+  const resolved = resolveWorkspaceRoot(cwd);
   reviewGateEnabledCache.set(resolved, enabled);
   const state = readState(resolved);
   return writeState(resolved, {

@@ -103,13 +103,16 @@ Antigravity implements
 -> needs-attention + continue: Antigravity keeps fixing
 ```
 
-`/codex:setup --enable-review-gate` updates the workspace config and installs the active Stop hook into:
+`/codex:setup --enable-review-gate` updates the workspace config and installs the local Stop hook into:
 
 ```text
 ~/.gemini/config/hooks.json
+~/.gemini/config/plugins/codex/hooks.json
+~/.gemini/antigravity-cli/plugins/codex/hooks.json
 ```
 
-The committed plugin hook manifest stays static in `hooks/hooks.json` and does not contain local absolute paths. Local machine paths are written only to the user's active Antigravity hooks config.
+The committed plugin hook manifest stays static in `hooks/hooks.json` and does not contain local absolute paths. Local machine paths are written only to the user's Antigravity hook configs during setup.
+When more than one Antigravity hook config invokes the same Stop event, the runtime suppresses the duplicate while the first local hook process is still running.
 
 Explicit `/codex:*` command sessions are skipped by the automatic Stop-hook review. For example, `/codex:monitor`, `/codex:setup`, and `/codex:review` do not trigger a second review just because the workspace has uncommitted changes.
 
@@ -186,6 +189,7 @@ Run diagnostics:
 - workspace review-gate config
 - installed plugin hook manifest
 - active Stop hook in `~/.gemini/config/hooks.json`
+- plugin Stop hooks in `~/.gemini/config/plugins/codex/hooks.json` and `~/.gemini/antigravity-cli/plugins/codex/hooks.json`
 - review-gate event path
 
 `--run-hook-test` verifies hook execution and event writing in bypass mode. It does not call Codex.
@@ -197,6 +201,7 @@ Automatic review runs only when all of these are true:
 - The plugin is installed with hook support.
 - `/codex:setup --enable-review-gate` is enabled for the current workspace.
 - `~/.gemini/config/hooks.json` contains `codex-stop-review-gate`.
+- Plugin hook files contain enabled `codex-stop-review-gate` entries pointing at the local hook runtime.
 - The workspace is a git repository.
 - There are staged, unstaged, or untracked changes.
 - Antigravity reaches a normal Stop-hook point after editing.

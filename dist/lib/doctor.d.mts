@@ -1,4 +1,4 @@
-import { type ActiveReviewGateHookInfo } from "./antigravity-hooks.mjs";
+import { type ActiveReviewGateHookInfo, type ImportedReviewGateHookInfo } from "./antigravity-hooks.mjs";
 import { type CommandAvailability } from "./exec-resolver.mjs";
 import { type ReviewGateEvent } from "./review-gate-events.mjs";
 export type DoctorCheckStatus = "pass" | "warn" | "fail" | "skip";
@@ -25,6 +25,8 @@ export interface AntigravityDoctorInfo {
     installedHooksFileExists: boolean;
     installedHookCommand: string | null;
     installedHookEnabled: boolean | null;
+    importedHooks: ImportedReviewGateHookInfo[];
+    importedHookInstalled: boolean;
 }
 export interface ReviewGateDoctorInfo {
     enabled: boolean;

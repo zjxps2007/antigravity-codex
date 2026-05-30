@@ -1,6 +1,6 @@
 {
   "codex-stop-review-gate": {
-    "enabled": true,
+    "enabled": false,
     "Stop": [
       {
         "type": "command",

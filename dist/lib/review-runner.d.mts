@@ -5,5 +5,7 @@ export interface ReviewRunResult {
     stdout: string;
     stderr: string;
     status: number | null;
+    timedOut: boolean;
+    timeoutMs: number;
 }
 export declare function runCodexReview(cwd: string): ReviewRunResult;
