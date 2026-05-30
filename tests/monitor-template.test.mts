@@ -143,6 +143,7 @@ test("monitor template renders event timeline and execution logs", async () => {
   assert.match(diagnosticsOutput, /Review gate config/);
   assert.match(output, /Event Timeline/);
   assert.match(output, /gate-test/);
+  assert.match(output, /elapsed 2s/);
   assert.match(output, /Execution Logs/);
   assert.match(output, /stdout log line/);
   assert.match(output, /stderr log line/);
@@ -187,7 +188,9 @@ test("monitor template renders review verdict and findings for completed jobs", 
             title: "Codex Adversarial Review",
             summary: "Adversarial review of working tree",
             status: "completed",
+            createdAt: "2026-05-23T08:00:00.000Z",
             updatedAt: "2026-05-23T08:00:03.000Z",
+            completedAt: "2026-05-23T08:00:03.000Z",
             reviewVerdict: "needs-attention",
             reviewSummary: "Review found behavior risks.",
             reviewFindings: [
@@ -224,6 +227,7 @@ test("monitor template renders review verdict and findings for completed jobs", 
   assert.match(jobOutput, /id="job-review-attention" class="run completed needs-attention"/);
   assert.match(jobOutput, /process done/);
   assert.match(jobOutput, /needs-attention/);
+  assert.match(jobOutput, /elapsed 3s/);
   assert.match(jobOutput, /Review found behavior risks/);
   assert.match(jobOutput, /Actionable Findings \(1\)/);
   assert.match(jobOutput, /Close transition blocks interaction/);

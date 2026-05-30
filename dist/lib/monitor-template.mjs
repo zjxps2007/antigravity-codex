@@ -657,6 +657,8 @@ export function renderMonitorHtml() {
       padding: 4px 8px;
       border-radius: 6px;
       border: 1px solid var(--panel-border);
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .badge-group {
@@ -664,6 +666,11 @@ export function renderMonitorHtml() {
       gap: 8px;
       margin-top: 8px;
       flex-wrap: wrap;
+    }
+
+    .elapsed-row {
+      display: flex;
+      margin-top: 8px;
     }
 
     .badge {
@@ -741,6 +748,13 @@ export function renderMonitorHtml() {
       background: rgba(148, 163, 184, 0.1);
       color: #cbd5e1;
       border: 1px solid rgba(148, 163, 184, 0.18);
+    }
+    .badge.elapsed {
+      background: rgba(165, 180, 252, 0.08);
+      color: #c7d2fe;
+      border: 1px solid rgba(165, 180, 252, 0.16);
+      text-transform: none;
+      letter-spacing: 0;
     }
     .badge.failed,
     .badge.cancelled {
@@ -1361,6 +1375,7 @@ export function renderMonitorHtml() {
       'needs-attention': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" /></svg>',
       running: '<svg class="spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>',
       pending: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
+      elapsed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
       skipped: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" /></svg>',
       timeout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>',
       interrupted: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008M10.29 3.86L1.82 18a2.25 2.25 0 001.93 3.38h16.5A2.25 2.25 0 0022.18 18L13.71 3.86a2 2 0 00-3.42 0z" /></svg>',
@@ -1400,6 +1415,53 @@ export function renderMonitorHtml() {
       const date = new Date(value || Date.now());
       if (Number.isNaN(date.getTime())) return '';
       return date.toLocaleTimeString();
+    }
+
+    function timestampMs(value) {
+      const time = Date.parse(value || '');
+      return Number.isFinite(time) ? time : null;
+    }
+
+    function formatDuration(ms) {
+      if (!Number.isFinite(ms) || ms < 0) return '';
+      if (ms < 1000) return String(Math.max(1, Math.round(ms))) + 'ms';
+      const totalSeconds = Math.round(ms / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      if (hours > 0) return hours + 'h ' + minutes + 'm';
+      if (minutes > 0) return minutes + 'm ' + seconds + 's';
+      return seconds + 's';
+    }
+
+    function durationBadge(ms) {
+      const value = formatDuration(ms);
+      return value ? \`<span class="badge elapsed">\${ICONS.elapsed}elapsed \${h(value)}</span>\` : '';
+    }
+
+    function jobDurationMs(job) {
+      const start = timestampMs(job.createdAt) || timestampMs(job.updatedAt) || timestampMs(job.completedAt);
+      if (!start) return null;
+      const terminal = ['completed', 'failed', 'cancelled'].includes(job.status || '');
+      const end = terminal
+        ? (timestampMs(job.completedAt) || timestampMs(job.updatedAt) || Date.now())
+        : Date.now();
+      return end - start;
+    }
+
+    function runDurationMs(run, status) {
+      const started = pick(run.items, 'started');
+      const decision = pick(run.items, 'decision');
+      const result = pick(run.items, 'codex-result');
+      const error = pick(run.items, 'error');
+      if (decision && Number.isFinite(decision.durationMs)) return decision.durationMs;
+      const start = timestampMs(started && started.time) || timestampMs(run.items[0] && run.items[0].time);
+      if (!start) return null;
+      const terminalEvent = decision || error || result;
+      const end = status === 'running'
+        ? Date.now()
+        : (timestampMs(terminalEvent && terminalEvent.time) || timestampMs(run.last && run.last.time) || Date.now());
+      return end - start;
     }
 
     function eventMessage(event) {
@@ -1487,6 +1549,7 @@ export function renderMonitorHtml() {
       const kindBadge = job.kind ? \`<span class="badge">\${h(job.kind)}</span>\` : '';
       const pidBadge = job.pid ? \`<span class="badge">pid \${h(job.pid)}</span>\` : '';
       const verdictBadge = reviewVerdict ? \`<span class="badge \${h(reviewVerdict)}">\${verdictIcon}\${h(reviewVerdict)}</span>\` : '';
+      const elapsedBadge = durationBadge(jobDurationMs(job));
       const summary = reviewSummary || job.summary || phase;
 
       let logHtml = '';
@@ -1519,6 +1582,7 @@ export function renderMonitorHtml() {
                 \${kindBadge}
                 \${pidBadge}
               </div>
+              <div class="elapsed-row">\${elapsedBadge}</div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
               <div class="run-time">\${h(updated ? new Date(updated).toLocaleString() : '')}</div>
@@ -1617,6 +1681,7 @@ export function renderMonitorHtml() {
 
       const statusIcon = ICONS[status] || '';
       const verdictIcon = ICONS[verdict] || '';
+      const elapsedBadge = durationBadge(runDurationMs(run, status));
 
       let summaryHtml = '';
       if (summary) {
@@ -1633,6 +1698,7 @@ export function renderMonitorHtml() {
                 <span class="badge \${h(status)}">\${statusIcon}\${h(status)}</span>
                 <span class="badge \${h(verdict)}">\${verdictIcon}\${h(verdict)}</span>
               </div>
+              <div class="elapsed-row">\${elapsedBadge}</div>
             </div>
             <div style="display: flex; align-items: center; gap: 12px;">
               <div class="run-time">\${h(new Date(run.last.time || Date.now()).toLocaleString())}</div>
